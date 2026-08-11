@@ -1,25 +1,25 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { AuthProvider } from '../../context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 
 // ─── Screens Import ───────────────────────────────────────────────────────────
-import SplashScreen from '../../pages/SplashScreen';
-import HomeScreen from '../../pages/HomeScreen';
-import ContestPoolScreen from '../../pages/ContestPoolScreen';
-import HowToPlayScreen from '../../pages/HowToPlayScreen';
-import LoginScreen from '../../pages/LoginScreen';
-import RegisterScreen from '../../pages/RegisterScreen';
+import SplashScreen from './pages/SplashScreen';
+import HomeScreen from './pages/HomeScreen';
+import ContestPoolScreen from './pages/ContestPoolScreen';
+import HowToPlayScreen from './pages/HowToPlayScreen';
+import LoginScreen from './pages/LoginScreen';
+import RegisterScreen from './pages/RegisterScreen';
 
 // 👇 ADD THESE NEW IMPORTS
-import SingleCardGameScreen from '../../pages/SingleCartSelectionScreen'; // Single Card game mode
-import PairSelectionGameScreen from '../../pages/PairSelectionScreen'; // Pair Selection game mode
-import TrioGameScreen from '../../pages/TrioGameScreen'; // Trio Game mode
-import LastDigitSumGameScreen from '../../pages/LastdigitSumScreen'; // Last Digit Sum mode
-import LuckyDrawJackpotScreen from '../../pages/JackpotScreen'; // Lucky Draw Jackpot mode
-import LiveGameScreen from '../../pages/LiveGameScreen'; // Live round screen
-import WinningScreen from '../../pages/WinningScreen'; // Win/Loss result screen
-import WalletScreen from '../../pages/WalletScreen';
+import SingleCardGameScreen from './pages/SingleCartSelectionScreen'; // Single Card game mode
+import PairSelectionGameScreen from './pages/PairSelectionScreen'; // Pair Selection game mode
+import TrioGameScreen from './pages/TrioGameScreen'; // Trio Game mode
+import LastDigitSumGameScreen from './pages/LastdigitSumScreen'; // Last Digit Sum mode
+import LuckyDrawJackpotScreen from './pages/JackpotScreen'; // Lucky Draw Jackpot mode
+import LiveGameScreen from './pages/LiveGameScreen'; // Live round screen
+import WinningScreen from './pages/WinningScreen'; // Win/Loss result screen
+import WalletScreen from './pages/WalletScreen';
 
 const Stack = createStackNavigator();
 
