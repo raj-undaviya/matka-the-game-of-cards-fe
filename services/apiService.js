@@ -1,11 +1,12 @@
 // services/apiService.js
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 // Change this URL to matches your local network IP if testing on physical devices (e.g. 'http://192.168.1.X:8000/api')
 // For Android Emulators use: 'http://10.0.2.2:8000/api'
 // export const API_BASE_URL = 'https://matka-the-game-of-cards-be.vercel.app/api';
-export const API_BASE_URL = Platform.OS === 'android' 
-  ? 'http://192.168.1.9:8000/api' 
-  : 'http://127.0.0.1:8000/api';
+export const API_BASE_URL =
+  Platform.OS === "android"
+    ? "http://192.168.0.103:8000/api"
+    : "http://127.0.0.1:8000/api";
 
 let authToken = null;
 
@@ -15,11 +16,11 @@ export const setAuthToken = (token) => {
 
 const getHeaders = (extraHeaders = {}) => {
   const headers = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...extraHeaders,
   };
   if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
+    headers["Authorization"] = `Bearer ${authToken}`;
   }
   return headers;
 };
@@ -27,7 +28,8 @@ const getHeaders = (extraHeaders = {}) => {
 const handleResponse = async (response) => {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const errorMsg = data.message || data.error || JSON.stringify(data) || 'Request failed';
+    const errorMsg =
+      data.message || data.error || JSON.stringify(data) || "Request failed";
     throw new Error(errorMsg);
   }
   return data;
@@ -37,7 +39,7 @@ export const apiService = {
   // ── Authentication APIs ──
   login: async (email, password) => {
     const response = await fetch(`${API_BASE_URL}/auth/login/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ email, password }),
     });
@@ -46,7 +48,7 @@ export const apiService = {
 
   register: async (username, email, password, confirmPassword) => {
     const response = await fetch(`${API_BASE_URL}/auth/register/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
         username,
@@ -60,7 +62,7 @@ export const apiService = {
 
   verifyOTP: async (email, otp) => {
     const response = await fetch(`${API_BASE_URL}/auth/verify-otp/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ email, otp }),
     });
@@ -69,7 +71,7 @@ export const apiService = {
 
   resendOTP: async (email) => {
     const response = await fetch(`${API_BASE_URL}/auth/otp/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ email }),
     });
@@ -78,7 +80,7 @@ export const apiService = {
 
   getProfile: async () => {
     const response = await fetch(`${API_BASE_URL}/auth/profile/`, {
-      method: 'GET',
+      method: "GET",
       headers: getHeaders(),
     });
     return handleResponse(response);
@@ -86,11 +88,11 @@ export const apiService = {
 
   // ── Game APIs ──
   getRounds: async (variation) => {
-    const url = variation 
+    const url = variation
       ? `${API_BASE_URL}/game/rounds/?variation=${variation}`
       : `${API_BASE_URL}/game/rounds/`;
     const response = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: getHeaders(),
     });
     return handleResponse(response);
@@ -98,7 +100,7 @@ export const apiService = {
 
   getRoundDetail: async (roundId) => {
     const response = await fetch(`${API_BASE_URL}/game/rounds/${roundId}/`, {
-      method: 'GET',
+      method: "GET",
       headers: getHeaders(),
     });
     return handleResponse(response);
@@ -106,7 +108,7 @@ export const apiService = {
 
   placeBet: async (roundId, selectedNumbers, entryFee) => {
     const response = await fetch(`${API_BASE_URL}/game/bets/place/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
         round_id: roundId,
@@ -119,7 +121,7 @@ export const apiService = {
 
   getMyBets: async () => {
     const response = await fetch(`${API_BASE_URL}/game/bets/my/`, {
-      method: 'GET',
+      method: "GET",
       headers: getHeaders(),
     });
     return handleResponse(response);
@@ -128,15 +130,15 @@ export const apiService = {
   // ── Wallet APIs ──
   getWalletBalance: async () => {
     const response = await fetch(`${API_BASE_URL}/wallet/balance/`, {
-      method: 'GET',
+      method: "GET",
       headers: getHeaders(),
     });
     return handleResponse(response);
   },
 
-  initDeposit: async (amount, provider = 'razorpay') => {
+  initDeposit: async (amount, provider = "razorpay") => {
     const response = await fetch(`${API_BASE_URL}/wallet/deposit/init/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ amount: Number(amount), provider }),
     });
@@ -145,7 +147,7 @@ export const apiService = {
 
   verifyDeposit: async (verificationPayload = {}) => {
     const response = await fetch(`${API_BASE_URL}/wallet/deposit/verify/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(verificationPayload),
     });
@@ -154,16 +156,16 @@ export const apiService = {
 
   requestWithdrawal: async (amount, details = {}) => {
     const response = await fetch(`${API_BASE_URL}/wallet/withdraw/`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
         amount: Number(amount),
-        mode: details.mode || 'upi',
-        upi_id: details.upiId || '',
-        account_number: details.accountNumber || '',
-        ifsc_code: details.ifsccode || '',
-        account_holder: details.accountHolder || '',
-        note: details.note || 'Withdraw request from mobile application',
+        mode: details.mode || "upi",
+        upi_id: details.upiId || "",
+        account_number: details.accountNumber || "",
+        ifsc_code: details.ifsccode || "",
+        account_holder: details.accountHolder || "",
+        note: details.note || "Withdraw request from mobile application",
       }),
     });
     return handleResponse(response);
@@ -171,7 +173,7 @@ export const apiService = {
 
   getTransactions: async () => {
     const response = await fetch(`${API_BASE_URL}/wallet/transactions/`, {
-      method: 'GET',
+      method: "GET",
       headers: getHeaders(),
     });
     return handleResponse(response);

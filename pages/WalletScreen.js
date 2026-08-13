@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView, Platform, Alert,
   StyleSheet, ImageBackground, Modal, ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { apiService } from '../services/apiService';
@@ -92,6 +93,7 @@ export default function WalletScreen({ navigation }) {
 
   const getCashfreeHtml = (order) => {
     const sessionId = order.payment_session_id || order.paymentSessionId || order.payment_sessionId || order.paymentSessionID || '';
+    const paymentUrl = order.payment_url || order.paymentUrl || order.paymentURL || order.payment_link || order.paymentLink || '';
     const mode = order.mode || 'sandbox';
     return `
       <!DOCTYPE html>
@@ -140,27 +142,35 @@ export default function WalletScreen({ navigation }) {
             }
 
             function launchCheckout() {
-              if (!window.Cashfree) {
-                updateStatus('Cashfree SDK not loaded yet...');
-                return setTimeout(launchCheckout, 150);
-              }
+              if ('${sessionId}') {
+                if (!window.Cashfree) {
+                  updateStatus('Cashfree SDK not loaded yet...');
+                  return setTimeout(launchCheckout, 150);
+                }
 
-              try {
-                updateStatus('Opening Cashfree checkout...');
-                const cashfree = Cashfree({ mode: '${mode}' });
-                cashfree.checkout({
-                  paymentSessionId: '${sessionId}',
-                  redirectTarget: '_self',
-                })
-                .then(function(response) {
-                  report({ status: 'success', response: response });
-                })
-                .catch(function(error) {
-                  report({ status: 'failed', error: error });
-                });
-              } catch (err) {
-                report({ status: 'js_error', message: err.message || 'Cashfree checkout initialization failed', stack: err.stack });
-                updateStatus('Unable to start checkout.');
+                try {
+                  updateStatus('Opening Cashfree checkout...');
+                  const cashfree = Cashfree({ mode: '${mode}' });
+                  cashfree.checkout({
+                    paymentSessionId: '${sessionId}',
+                    redirectTarget: '_self',
+                  })
+                  .then(function(response) {
+                    report({ status: 'success', response: response });
+                  })
+                  .catch(function(error) {
+                    report({ status: 'failed', error: error });
+                  });
+                } catch (err) {
+                  report({ status: 'js_error', message: err.message || 'Cashfree checkout initialization failed', stack: err.stack });
+                  updateStatus('Unable to start checkout.');
+                }
+              } else if ('${paymentUrl}') {
+                updateStatus('Redirecting to Cashfree payment page...');
+                window.location.href = '${paymentUrl}';
+              } else {
+                report({ status: 'failed', error: { message: 'No Cashfree session or payment URL available.' } });
+                updateStatus('No checkout data available.');
               }
             }
 
@@ -244,9 +254,16 @@ export default function WalletScreen({ navigation }) {
     setInputAmount('');
   };
 
-  const hideAction = () => {
+  const hideAction = async () => {
+    setShowSandboxModal(false);
     setActionType(null);
     setInputAmount('');
+    setCurrentOrder(null);
+    try {
+      await fetchWalletDetails();
+    } catch (err) {
+      console.log('Unable to refresh wallet after cancel:', err);
+    }
   };
 
   const handleSubmit = async () => {
@@ -262,9 +279,25 @@ export default function WalletScreen({ navigation }) {
       if (actionType === 'deposit') {
         const order = await apiService.initDeposit(val, 'cashfree');
         console.log('Cashfree deposit init response', order);
-        if (!order || (!order.payment_session_id && !order.paymentSessionId && !order.payment_url)) {
+        const hasSessionOrLink = !!(
+          order?.payment_session_id ||
+          order?.paymentSessionId ||
+          order?.payment_sessionId ||
+          order?.paymentSessionID ||
+          order?.payment_url ||
+          order?.paymentUrl ||
+          order?.paymentURL ||
+          order?.payment_link ||
+          order?.paymentLink
+        );
+        if (!order || !hasSessionOrLink) {
           console.log('Invalid Cashfree order response', order);
-          throw new Error('Unable to initialize Cashfree payment. Please check your deposit settings and try again.');
+          Alert.alert(
+            'Transaction Error',
+            `Cashfree init failed. Response: ${JSON.stringify(order)}`
+          );
+          setIsSubmitting(false);
+          return;
         }
         setCurrentOrder(order);
         setShowSandboxModal(true);
@@ -549,7 +582,7 @@ export default function WalletScreen({ navigation }) {
             visible={showSandboxModal}
             transparent={false}
             animationType="slide"
-            onRequestClose={() => setShowSandboxModal(false)}
+            onRequestClose={hideAction}
           >
             <SafeAreaView style={{ flex: 1, backgroundColor: '#121212' }}>
               <View style={{
@@ -563,7 +596,7 @@ export default function WalletScreen({ navigation }) {
                 backgroundColor: '#121212'
               }}>
                 <Text style={{ color: '#D4AF37', fontSize: 18, fontWeight: '800' }}>Cashfree Checkout</Text>
-                <TouchableOpacity onPress={() => setShowSandboxModal(false)} style={{ padding: 8 }}>
+                <TouchableOpacity onPress={hideAction} style={{ padding: 8 }}>
                   <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>Cancel</Text>
                 </TouchableOpacity>
               </View>
