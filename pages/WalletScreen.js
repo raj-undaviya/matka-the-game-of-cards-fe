@@ -1,20 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  SafeAreaView, ScrollView, TextInput,
-  KeyboardAvoidingView, Platform, Alert,
-  StyleSheet, ImageBackground, Modal, ActivityIndicator,
+  ActivityIndicator,
+  Alert,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView, ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
+import SplitGradientText from '../components/SplitGradientText';
+import TransactionHistory from '../components/TransactionHistory';
+import WalletCard from '../components/WalletCard';
+import { useAuth } from '../context/AuthContext'; // ⬅ adjust path to match your project
 import { apiService } from '../services/apiService';
 import { walletStyles as styles } from '../styles/GlobalStyle';
-import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
-import WalletCard from '../components/WalletCard';
-import TransactionHistory from '../components/TransactionHistory';
-import SplitGradientText from '../components/SplitGradientText';
-import { useAuth } from '../context/AuthContext'; // ⬅ adjust path to match your project
 
 // ─── Text Gradient Component ───────────────────────────────────────────────────
 const GradientText = ({ text, style }) => {
