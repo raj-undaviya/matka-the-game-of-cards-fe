@@ -47,7 +47,7 @@ export default function SplashScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar hidden={true} />
       <Video
-        source={require('../assets/images/Logo_effect_color_light_golden_202606301723.mp4')}
+        source={require('../assets/images/homescreen_ui_video.mp4')}
         style={styles.video}
         resizeMode={ResizeMode.COVER}
         shouldPlay={true}

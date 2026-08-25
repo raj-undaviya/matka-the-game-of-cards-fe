@@ -22,11 +22,9 @@ const gameVariations = [
   {
     id: 1,
     name: 'SINGLE CARD GAME',
-    subTitle: 'WAR JAE.🪙100',
-    entrEs: '30x',
+    subTitle: 'ENTRY FEES.🪙100',
+    rewards: '30x',
     poolValue: '🪙2,109',
-    codeLeft: '81CX',
-    codeRight: '6150X',
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#FF3B30', '#C20005', '#5E0002'],
     rewardLabel: '10x',
@@ -34,11 +32,10 @@ const gameVariations = [
   {
     id: 5,
     name: 'PAIR SELECTION',
-    subTitle: 'WAR JAE.🪙150',
-    entrEs: '20x',
+    subTitle: 'ENTRY FEES.🪙100',
+    rewards: '20x',
     poolValue: '🪙2,105',
-    codeLeft: '81CX',
-    codeRight: '6176X',
+  
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#06B6D4', '#0891B2', '#003d4d'],
     rewardLabel: '20x',
@@ -46,11 +43,11 @@ const gameVariations = [
   {
     id: 2,
     name: 'TRIO GAME TION AU',
-    subTitle: 'WAR JAE.🪙200',
-    entrEs: '32x',
+    subTitle: 'ENTRY FEES.🪙100',
+    rewards: '32x',
     poolValue: '🪙2,105',
-    codeLeft: '81CX',
-    codeRight: '6176X',
+    
+  
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#2EA043', '#16752E', '#093D15'],
     rewardLabel: '50x',
@@ -58,11 +55,10 @@ const gameVariations = [
   {
     id: 3,
     name: 'LAST DIGIT SUM',
-    subTitle: 'WAR JAE.🪙1,000',
-    entrEs: '33x',
+    subTitle: 'ENTRY FEES.🪙100',
+    rewards: '33x',
     poolValue: '🪙875',
-    codeLeft: '81CX',
-    codeRight: '6176X',
+   
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#FF3B30', '#C20005', '#5E0002'],
     rewardLabel: '80x',
@@ -70,11 +66,10 @@ const gameVariations = [
   {
     id: 4,
     name: 'LUCKLY DRAW JACCPOT',
-    subTitle: 'WAR JAE.🪙100 MIN',
-    entrEs: '23x',
+    subTitle: 'ENTRY FEES.🪙100',
+    rewards: '23x',
     poolValue: '🪙805',
-    codeLeft: '81CX',
-    codeRight: '6176X',
+  
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#7C3AED', '#5B21B6', '#3B0764'],
     rewardLabel: '80x',
@@ -133,13 +128,7 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
         style={homeScreenStyles.headerGradient}
       >
         {/* Slightly brighter red-orange glow beam rising from bottom-center */}
-        <LinearGradient
-          colors={['rgba(255, 87, 34, 0.45)', 'rgba(255, 87, 34, 0)']}
-          start={{ x: 0.5, y: 1 }}
-          end={{ x: 0.5, y: 0 }}
-          style={homeScreenStyles.headerGlowBeam}
-        />
-
+        
         {/* Scattered small star/sparkle particles (low opacity) */}
         <View style={[homeScreenStyles.headerSparkle, { top: 8, left: '14%', opacity: 0.12 }]}><Text style={homeScreenStyles.sparkleChar}>★</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { top: 32, left: '24%', opacity: 0.18 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
@@ -147,18 +136,20 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
         <View style={[homeScreenStyles.headerSparkle, { top: 28, right: '34%', opacity: 0.15 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { top: 10, right: '18%', opacity: 0.12 }]}><Text style={homeScreenStyles.sparkleChar}>★</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { top: 38, right: '8%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
-
+        <View style={[homeScreenStyles.headerSparkle, { top: 8, right: '6%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
+        <View style={[homeScreenStyles.headerSparkle, { bottom: 38, right: '4%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
+         <View style={[homeScreenStyles.headerSparkle,{ top: 60, right: '45%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
         {/* Main Content Layout */}
         <View style={homeScreenStyles.headerContent}>
 
-          {/* Left Side: Circular gold-bordered gear badge with shield emblem */}
+          {/* Left Side: Circular gold-bordered play badge */}
           <TouchableOpacity
             onPress={onHelpPress}
             activeOpacity={0.85}
             style={homeScreenStyles.leftBadgeGear}
           >
             <View style={homeScreenStyles.leftBadgeInner}>
-              <FontAwesome name="shield" size={12} color="#FFD700" />
+              <Ionicons name="play" size={12} color="#FFD700" />
             </View>
           </TouchableOpacity>
 
@@ -167,14 +158,14 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
             <Text style={homeScreenStyles.headerTitleText}>{title.toUpperCase()}</Text>
           </View>
 
-          {/* Right Side: Circular gold-bordered badge with crown icon and value */}
+          {/* Right Side: Circular gold-bordered wallet badge with value */}
           <TouchableOpacity
             onPress={onBadgePress}
             activeOpacity={0.85}
             style={homeScreenStyles.rightBadgeContainer}
           >
             <View style={homeScreenStyles.rightBadgeIconCircle}>
-              <MaterialCommunityIcons name="crown" size={11} color="#FFD700" />
+              <MaterialCommunityIcons name="wallet-outline" size={12} color="#FFD700" />
             </View>
             <Text style={homeScreenStyles.rightBadgeText}>{badgeValue}</Text>
           </TouchableOpacity>
@@ -199,7 +190,7 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
 };
 
 const HomeScreen = ({ navigation }) => {
-  const { user, logout } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
   const [balance, setBalance] = useState(0);
   const isFocused = useIsFocused();
 
@@ -248,7 +239,7 @@ const HomeScreen = ({ navigation }) => {
               {/* Inner Header Label Section */}
               <View style={homeScreenStyles.boardHeaderRow}>
                 <View style={homeScreenStyles.boardHeaderLeftGroup}>
-                  <MaterialCommunityIcons name="slot-machine" size={16} color="#DAA520" />
+                   <FontAwesome name="star" size={10} color="#DAA520" />
                   <FontAwesome name="star" size={10} color="#DAA520" />
                 </View>
                 <Text style={homeScreenStyles.boardHeaderTitle}>SELECT A GAME MODE</Text>
@@ -278,14 +269,12 @@ const HomeScreen = ({ navigation }) => {
                             <Text style={homeScreenStyles.gameName}>{game.name}</Text>
                             <Text style={homeScreenStyles.gameSubTitle}>{game.subTitle}</Text>
                           </View>
-                          <View style={homeScreenStyles.actionBadge}>
-                            <FontAwesome name="bell" size={11} color="#888888" />
-                          </View>
+                          
                         </View>
 
                         <View style={homeScreenStyles.detailsRow}>
                           <Text style={homeScreenStyles.detailsTextLeft}>
-                            ENTR | ES <Text style={homeScreenStyles.goldMultiplierText}>{game.entrEs}</Text>
+                            REWARDS | <Text style={homeScreenStyles.goldMultiplierText}>{game.rewards}</Text>
                           </Text>
                           <Text style={homeScreenStyles.detailsTextRight}>
                             {game.poolValue}

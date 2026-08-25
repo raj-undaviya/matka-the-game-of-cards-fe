@@ -26,7 +26,6 @@ export default function RegisterScreen({ navigation }) {
   const [isVerifying, setIsVerifying] = useState(false);
 
   const { register, verifyEmailOTP, isLoading } = useContext(AuthContext);
-
   const handleRegister = async () => {
     if (!username || !email || !password || !confirmPassword) {
       Alert.alert('Missing Fields', 'Please fill in all the details');
@@ -79,6 +78,7 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <ImageBackground
+      source={require('../assets/images/login_screen_background_img.png')}
       style={[StyleSheet.absoluteFillObject, { flex: 1 }]}
       resizeMode="cover"
     >
@@ -260,7 +260,7 @@ export default function RegisterScreen({ navigation }) {
                     )}
 
                     <TouchableOpacity onPress={handleResendOTP} style={styles.resendLink}>
-                      <Text style={styles.resendText}>Didn't receive code? Resend OTP</Text>
+                      <Text style={styles.resendText}>Did not receive code? Resend OTP</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -293,8 +293,9 @@ const styles = StyleSheet.create({
   gradient: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingVertical: 50,
-    justifyContent: 'center',
+    paddingTop: 12,
+    paddingBottom: 126,
+    justifyContent: 'flex-start',
     flexGrow: 1,
   },
   logoContainer: {
@@ -333,7 +334,7 @@ const styles = StyleSheet.create({
   outerBoardFrame: {
     borderWidth: 3,
     borderColor: '#D4AF37',
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: '#0F0F0F',
     padding: 6,
     shadowColor: '#000',
@@ -345,7 +346,7 @@ const styles = StyleSheet.create({
   innerCard: {
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.45)',
-    borderRadius: 20,
+    borderRadius: 8,
     padding: 20,
     backgroundColor: '#121212',
   },
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1.5,
     borderColor: '#333',
-    borderRadius: 12,
+    borderRadius: 8,
     color: '#FFD700',
     fontSize: 15,
     paddingHorizontal: 16,
@@ -384,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1.5,
     borderColor: '#333',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
   },
   passwordInput: {
@@ -415,7 +416,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   actionButton: {
-    borderRadius: 10, // Capsule shape
+    borderRadius: 8,
     marginTop: 18,
     borderWidth: 1.5,
     borderColor: '#FFF5C2', // Light gold border
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
   buttonGradient: {
     paddingVertical: 14,
     alignItems: 'center',
-    borderRadius: 10, // 25 minus border width
+    borderRadius: 8,
   },
   actionButtonText: {
     color: '#5E0004',

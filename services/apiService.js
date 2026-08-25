@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 // export const API_BASE_URL = 'https://matka-the-game-of-cards-be.vercel.app/api';
 export const API_BASE_URL =
   Platform.OS === "android"
-    ? "http://192.168.0.103:8000/api"
+    ? "http://192.168.1.5:8000/api"
     : "http://127.0.0.1:8000/api";
 
 let authToken = null;
