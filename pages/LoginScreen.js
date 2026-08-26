@@ -24,7 +24,22 @@ export default function LoginScreen({ navigation }) {
     }
     const result = await login(email, password);
     if (!result.success) {
-      Alert.alert('Authentication Failed', result.error);
+      if (result.isEmailVerified === false) {
+        Alert.alert(
+          'Email Verification Required',
+          result.message || 'Please verify your email to continue.',
+          [
+            {
+              text: 'Verify Now',
+              onPress: () => {
+                navigation.navigate('VerifyOTP', { email: result.email || email });
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Authentication Failed', result.error);
+      }
     } else {
       navigation.replace('Home');
     }

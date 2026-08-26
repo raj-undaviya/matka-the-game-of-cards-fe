@@ -21,12 +21,7 @@ export default function RegisterScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // OTP Verification state
-  const [showOtpScreen, setShowOtpScreen] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  const { register, verifyEmailOTP, isLoading } = useContext(AuthContext);
+  const { register, isLoading } = useContext(AuthContext);
 
   const handleOpenTerms = () => {
     const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://127.0.0.1:8000';
@@ -63,39 +58,11 @@ export default function RegisterScreen({ navigation }) {
     if (result.success) {
       Alert.alert(
         'Onboarding Step',
-        'We sent a verification code to your email. Please input it here.',
-        [{ text: 'OK', onPress: () => setShowOtpScreen(true) }]
+        'We sent a verification code to your email. Please verify it to complete registration.',
+        [{ text: 'OK', onPress: () => navigation.navigate('VerifyOTP', { email: email }) }]
       );
     } else {
       Alert.alert('Registration Failed', result.error);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    if (!otpCode || otpCode.length < 6) {
-      Alert.alert('Invalid Code', 'Please enter the 6-digit OTP');
-      return;
-    }
-    setIsVerifying(true);
-    const result = await verifyEmailOTP(email, otpCode);
-    setIsVerifying(false);
-    if (result.success) {
-      Alert.alert(
-        'Verified!',
-        'Your email has been verified. You can now login!',
-        [{ text: 'Go to Login', onPress: () => navigation.navigate('Login') }]
-      );
-    } else {
-      Alert.alert('Verification Failed', result.error);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    try {
-      await apiService.resendOTP(email);
-      Alert.alert('OTP Resent', 'A new OTP has been dispatched to your email.');
-    } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to resend OTP');
     }
   };
 
@@ -112,15 +79,13 @@ export default function RegisterScreen({ navigation }) {
           style={{ flex: 1 }}
         >
           {/* Top-left absolute back button */}
-          {!showOtpScreen && (
-            <TouchableOpacity
-              style={styles.absoluteBackButton}
-              onPress={() => navigation.navigate('Login')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="arrow-back" size={24} color="#FFF5C2" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.absoluteBackButton}
+            onPress={() => navigation.navigate('Login')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFF5C2" />
+          </TouchableOpacity>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -140,8 +105,6 @@ export default function RegisterScreen({ navigation }) {
             <View style={styles.outerBoardFrame}>
               <View style={styles.innerCard}>
 
-                {!showOtpScreen ? (
-                  <>
                     <Text style={styles.cardHeaderTitle}>REGISTER NEW PLAYER</Text>
 
                     <View style={styles.inputContainer}>
@@ -274,59 +237,6 @@ export default function RegisterScreen({ navigation }) {
                         Already have an account? <Text style={styles.loginTextGold}>Sign In</Text>
                       </Text>
                     </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.cardHeaderTitle}>VERIFY EMAIL ADDRESS</Text>
-                    <Text style={styles.otpDescription}>
-                      Enter the 6-digit OTP code sent to:{"\n"}
-                      <Text style={styles.otpEmailText}>{email}</Text>
-                    </Text>
-
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.label}>Verification Code</Text>
-                      <TextInput
-                        style={[styles.input, styles.otpInput]}
-                        value={otpCode}
-                        onChangeText={setOtpCode}
-                        placeholder="000000"
-                        placeholderTextColor="rgba(255,255,255,0.3)"
-                        keyboardType="numeric"
-                        maxLength={6}
-                        textAlign="center"
-                      />
-                    </View>
-
-                    {isVerifying ? (
-                      <ActivityIndicator size="large" color="#FFD700" style={{ marginVertical: 20 }} />
-                    ) : (
-                      <TouchableOpacity style={styles.actionButton} onPress={handleVerifyOTP} activeOpacity={0.8}>
-                        <LinearGradient
-                          colors={['#AA820A', '#EBB828', '#FFF5C2', '#EBB828', '#AA820A']}
-                          start={{ x: 0, y: 0.5 }}
-                          end={{ x: 1, y: 0.5 }}
-                          style={styles.buttonGradient}
-                        >
-                          <Text style={styles.actionButtonText}>VERIFY CODE</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity onPress={handleResendOTP} style={styles.resendLink}>
-                      <Text style={styles.resendText}>Did not receive code? Resend OTP</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => setShowOtpScreen(false)}
-                      style={styles.backLink}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="arrow-back" size={14} color="rgba(255,255,255,0.5)" style={{ marginRight: 6 }} />
-                        <Text style={styles.backLinkText}>Edit Registration Details</Text>
-                      </View>
-                    </TouchableOpacity>
-                  </>
-                )}
 
               </View>
             </View>
