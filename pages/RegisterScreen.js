@@ -4,11 +4,11 @@ import {
   View, Text, TextInput, TouchableOpacity,
   SafeAreaView, StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, StatusBar,
-  Image, ImageBackground,
+  Image, ImageBackground, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../context/AuthContext';
-import { apiService } from '../services/apiService';
+import { apiService, API_BASE_URL } from '../services/apiService';
 import { Ionicons } from '@expo/vector-icons';
 import GlowingBadgeBackground from '../components/GlowingBadgeBackground';
 
@@ -19,6 +19,7 @@ export default function RegisterScreen({ navigation }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // OTP Verification state
   const [showOtpScreen, setShowOtpScreen] = useState(false);
@@ -26,6 +27,21 @@ export default function RegisterScreen({ navigation }) {
   const [isVerifying, setIsVerifying] = useState(false);
 
   const { register, verifyEmailOTP, isLoading } = useContext(AuthContext);
+
+  const handleOpenTerms = () => {
+    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://127.0.0.1:8000';
+    Linking.openURL(`${baseUrl}/terms.html`).catch(err => {
+      Alert.alert('Error', 'Could not load link');
+    });
+  };
+
+  const handleOpenPrivacy = () => {
+    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://127.0.0.1:8000';
+    Linking.openURL(`${baseUrl}/privacy.html`).catch(err => {
+      Alert.alert('Error', 'Could not load link');
+    });
+  };
+
   const handleRegister = async () => {
     if (!username || !email || !password || !confirmPassword) {
       Alert.alert('Missing Fields', 'Please fill in all the details');
@@ -35,8 +51,15 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert('Invalid Password', 'Passwords do not match');
       return;
     }
+    if (!termsAccepted) {
+      Alert.alert(
+        'Consent Required',
+        'Please accept the Terms & Conditions and Privacy Policy to continue.'
+      );
+      return;
+    }
 
-    const result = await register(username, email, password, confirmPassword);
+    const result = await register(username, email, password, confirmPassword, termsAccepted);
     if (result.success) {
       Alert.alert(
         'Onboarding Step',
@@ -198,10 +221,40 @@ export default function RegisterScreen({ navigation }) {
                       </View>
                     </View>
 
+                    <View style={styles.checkboxContainer}>
+                      <TouchableOpacity
+                        style={styles.checkboxTouch}
+                        onPress={() => setTermsAccepted(!termsAccepted)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={termsAccepted ? 'checkbox' : 'square-outline'}
+                          size={20}
+                          color={termsAccepted ? '#FFD700' : 'rgba(255,255,255,0.6)'}
+                        />
+                      </TouchableOpacity>
+                      <Text style={styles.checkboxLabel}>
+                        I agree to the{' '}
+                        <Text style={styles.linkLabel} onPress={handleOpenTerms}>
+                          Terms & Conditions
+                        </Text>{' '}
+                        and acknowledge that I have read the{' '}
+                        <Text style={styles.linkLabel} onPress={handleOpenPrivacy}>
+                          Privacy Policy
+                        </Text>
+                        .
+                      </Text>
+                    </View>
+
                     {isLoading ? (
                       <ActivityIndicator size="large" color="#FFD700" style={{ marginVertical: 20 }} />
                     ) : (
-                      <TouchableOpacity style={styles.actionButton} onPress={handleRegister} activeOpacity={0.8}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { opacity: termsAccepted ? 1 : 0.5 }]}
+                        onPress={handleRegister}
+                        activeOpacity={0.8}
+                        disabled={!termsAccepted}
+                      >
                         <LinearGradient
                           colors={['#AA820A', '#EBB828', '#FFF5C2', '#EBB828', '#AA820A']}
                           start={{ x: 0, y: 0.5 }}
@@ -474,5 +527,27 @@ const styles = StyleSheet.create({
     left: 20,
     zIndex: 10,
     padding: 8,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 10,
+    marginBottom: 10,
+    paddingRight: 10,
+  },
+  checkboxTouch: {
+    marginRight: 10,
+    marginTop: 1,
+  },
+  checkboxLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    lineHeight: 18,
+    flex: 1,
+  },
+  linkLabel: {
+    color: '#FFD700',
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });

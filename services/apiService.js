@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 // export const API_BASE_URL = 'https://matka-the-game-of-cards-be.vercel.app/api';
 export const API_BASE_URL =
   Platform.OS === "android"
-    ? "http://192.168.1.5:8000/api"
+    ? "http://192.168.0.101:8000/api"
     : "http://127.0.0.1:8000/api";
 
 let authToken = null;
@@ -46,7 +46,7 @@ export const apiService = {
     return handleResponse(response);
   },
 
-  register: async (username, email, password, confirmPassword) => {
+  register: async (username, email, password, confirmPassword, termsAccepted) => {
     const response = await fetch(`${API_BASE_URL}/auth/register/`, {
       method: "POST",
       headers: getHeaders(),
@@ -55,6 +55,7 @@ export const apiService = {
         email,
         password,
         password2: confirmPassword,
+        termsAccepted,
       }),
     });
     return handleResponse(response);

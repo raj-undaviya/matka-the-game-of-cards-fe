@@ -78,10 +78,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (username, email, password, confirmPassword) => {
+  const register = async (username, email, password, confirmPassword, termsAccepted) => {
     setIsLoading(true);
     try {
-      const response = await apiService.register(username, email, password, confirmPassword);
+      const response = await apiService.register(username, email, password, confirmPassword, termsAccepted);
       return { success: true, message: response.message, user: response.user };
     } catch (error) {
       console.log('Registration failed:', error);
