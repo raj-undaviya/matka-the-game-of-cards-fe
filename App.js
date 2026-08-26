@@ -10,6 +10,7 @@ import ContestPoolScreen from './pages/ContestPoolScreen';
 import HowToPlayScreen from './pages/HowToPlayScreen';
 import LoginScreen from './pages/LoginScreen';
 import RegisterScreen from './pages/RegisterScreen';
+import VerifyOTPScreen from './pages/VerifyOTPScreen';
 
 // 👇 ADD THESE NEW IMPORTS
 import SingleCardGameScreen from './pages/SingleCartSelectionScreen'; // Single Card game mode
@@ -34,6 +35,7 @@ export default function App() {
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="VerifyOTP" component={VerifyOTPScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="ContestPool" component={ContestPoolScreen} />
           <Stack.Screen name="Howtoplay" component={HowToPlayScreen} />

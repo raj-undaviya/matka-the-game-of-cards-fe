@@ -63,9 +63,24 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const response = await apiService.login(email, password);
+
+      // If email is not verified, redirect to OTP verification flow
+      if (response && response.is_email_verified === false) {
+        return {
+          success: false,
+          isEmailVerified: false,
+          email: response.email || email,
+          message: response.message || 'Email not verified. OTP has been sent.'
+        };
+      }
+
       // Response returns { message: "Login successful", data: { id, email, token, ... } }
       const userProfile = response.data;
-      const userToken = userProfile.token;
+      const userToken = userProfile ? userProfile.token : null;
+
+      if (!userToken) {
+        throw new Error('Invalid response from server');
+      }
 
       setUser(userProfile);
       await updateToken(userToken);
