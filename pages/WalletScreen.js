@@ -266,47 +266,57 @@ export default function WalletScreen({ navigation }) {
     `;
   };
 
+  // ─── Trigger Payment Verification ──────────────────────────────────────────
+  const triggerVerification = async (orderId) => {
+    if (isSubmitting) return;
+
+    setShowSandboxModal(false);
+    setIsSubmitting(true);
+
+    try {
+      await apiService.verifyDeposit({
+        provider: 'cashfree',
+        order_id: orderId,
+      });
+
+      Alert.alert(
+        'Success',
+        'Deposit successful and balance updated!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              fetchWalletDetails();
+              hideAction();
+            },
+          },
+        ]
+      );
+    } catch (err) {
+      Alert.alert(
+        'Verification Failed',
+        err.message || 'Deposit verification failed'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // ─── Cashfree Message Handler ──────────────────────────────────────────────
   const handleCashfreeMessage = async (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
 
       if (data.status === 'success') {
-        setShowSandboxModal(false);
-        setIsSubmitting(true);
-
-        try {
-          await apiService.verifyDeposit({
-            provider: 'cashfree',
-            payment_session_id:
-              currentOrder?.payment_session_id ||
-              currentOrder?.paymentSessionId,
-            order_id:
-              currentOrder?.order_id ||
-              currentOrder?.orderId,
-            result: data.response || data,
-          });
-
-          Alert.alert(
-            'Success',
-            'Deposit successful and balance updated!',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  fetchWalletDetails();
-                  hideAction();
-                },
-              },
-            ]
-          );
-        } catch (err) {
-          Alert.alert(
-            'Verification Failed',
-            err.message || 'Deposit verification failed'
-          );
-        } finally {
-          setIsSubmitting(false);
+        const orderId =
+          data.order_id ||
+          currentOrder?.order_id ||
+          currentOrder?.orderId;
+        
+        if (orderId) {
+          triggerVerification(orderId);
+        } else {
+          Alert.alert('Verification Failed', 'Order ID not found');
         }
 
       } else if (data.status === 'failed') {
@@ -584,9 +594,10 @@ export default function WalletScreen({ navigation }) {
         }
 
         details = {
-          mode: 'bank_transfer',
+          mode: 'bank_account',
           accountHolder: accountHolder.trim(),
           accountNumber: accountNumber.trim(),
+          ifsccode: ifscCode.trim(),
           ifscCode: ifscCode.trim(),
           note: 'Withdrawal request via Bank Transfer',
         };
@@ -806,7 +817,7 @@ export default function WalletScreen({ navigation }) {
                 ]}
                 label={'TOTAL\nWITHDRAW'}
                 amount={getTotalWithdraw()}
-                buttonText="Lost"
+                buttonText="Withdraw"
                 onButtonPress={() =>
                   showAction('withdraw')
                 }
@@ -848,6 +859,31 @@ export default function WalletScreen({ navigation }) {
                     autoFocus
                   />
                 </View>
+
+                {actionType === 'deposit' && (
+                  <View style={localStyles.chipRow}>
+                    {[100, 500, 1000, 2000, 5000].map((amt) => (
+                      <TouchableOpacity
+                        key={amt}
+                        style={localStyles.chip}
+                        onPress={() => {
+                          const currentVal = Number(inputAmount) || 0;
+                          setInputAmount(String(currentVal + amt));
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={localStyles.chipText}>+₹{amt.toLocaleString()}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      style={[localStyles.chip, { backgroundColor: '#5E0004', borderColor: '#FFD700' }]}
+                      onPress={() => setInputAmount('')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[localStyles.chipText, { color: '#FFD700' }]}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* ── Withdrawal Details ── */}
                 {actionType === 'withdraw' && (
@@ -1144,6 +1180,17 @@ export default function WalletScreen({ navigation }) {
                     handleCashfreeMessage
                   }
 
+                  onNavigationStateChange={(navState) => {
+                    console.log('WebView Navigation State Change:', navState.url);
+                    if (navState.url && navState.url.includes('deposit/callback')) {
+                      const match = navState.url.match(/[?&]order_id=([^&]+)/);
+                      const orderId = match ? match[1] : null;
+                      if (orderId) {
+                        triggerVerification(orderId);
+                      }
+                    }
+                  }}
+
                   onError={(event) => {
                     console.log(
                       'WebView error:',
@@ -1381,5 +1428,29 @@ const localStyles = StyleSheet.create({
   loaderContainer: {
     marginVertical: 15,
     alignItems: 'center',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  chip: {
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 4,
+    marginVertical: 4,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  chipText: {
+    color: '#FFF5C2',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

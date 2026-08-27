@@ -47,7 +47,7 @@ export default function SplashScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar hidden={true} />
       <Video
-        source={require('../assets/images/homescreen_ui_video.mp4')}
+        source={require('../assets/images/splash_screen.mp4')}
         style={styles.video}
         resizeMode={ResizeMode.COVER}
         shouldPlay={true}
