@@ -12,6 +12,7 @@ import {
   Image,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useIsFocused } from '@react-navigation/native';
@@ -62,22 +63,19 @@ export default function ContestPoolScreen({ route, navigation }) {
       setIsLoading(true);
       apiService.getRounds(variation)
         .then(data => {
+          const generateBadgeCode = (name) => {
+            if (!name) return 'ARENA';
+            return name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
+          };
+
           const mapped = data.map((round, idx) => {
             const multiplier = round.reward_info?.multiplier || 10;
-            const names = [
-              'Bronze Arena', 
-              'Sillver Arena', 
-              'Sillver Arena $1000', 
-              'Sillver Arena $30', 
-              'Siilven: Arena', 
-              'Diacmnd- Arina'
-            ];
-            const badgeTexts = ['SLTOS', 'SLOSK', 'SLUCK', 'ALOUK', 'SLOCK', 'ALOSK'];
             
             return {
               id: round.id,
-              name: names[idx % names.length],
-              badgeCode: badgeTexts[idx % badgeTexts.length],
+              poolId: round.pool_id || round.pool, // Map the pool ID dynamically
+              name: round.pool_name || 'Standard Arena', // Dynamic name from backend
+              badgeCode: generateBadgeCode(round.pool_name || 'ARENA'), // Dynamic badge code
               entryFee: round.entry_fee,
               winningPrize: round.entry_fee * multiplier,
               maxSlots: round.max_slots,
@@ -92,7 +90,7 @@ export default function ContestPoolScreen({ route, navigation }) {
     }
   }, [variation, isFocused]);
 
-  const handleJoinPool = (pool) => {
+  const handleJoinPool = async (pool) => {
     console.log('Joining pool:', pool.name, 'for gameId:', gameId);
     
     const screenParams = { 
@@ -101,6 +99,19 @@ export default function ContestPoolScreen({ route, navigation }) {
       winningPrize: pool.winningPrize,
       reward: `${pool.winningPrize / pool.entryFee}x`
     };
+
+    if (pool.poolId) {
+      try {
+        await apiService.joinPool(pool.poolId);
+      } catch (err) {
+        const errorMsg = err.message || '';
+        // If they already joined, it's safe to proceed to navigation
+        if (!errorMsg.includes('already joined')) {
+          Alert.alert('Join Pool Error', errorMsg || 'Failed to join pool');
+          return;
+        }
+      }
+    }
 
     if (gameId === 1) {
       navigation.navigate('SingleCard', screenParams);

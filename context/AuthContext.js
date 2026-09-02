@@ -60,6 +60,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
+    console.log("Login ->>>", email, password)
     setIsLoading(true);
     try {
       const response = await apiService.login(email, password);
