@@ -129,6 +129,7 @@ export default function WalletScreen({ navigation }) {
       '';
 
     const mode = order.mode || 'sandbox';
+    const orderId = order.order_id || order.orderId || '';
 
     return `
       <!DOCTYPE html>
@@ -208,14 +209,32 @@ export default function WalletScreen({ navigation }) {
                       redirectTarget: '_self',
                     })
                     .then(function(response) {
-                      report({
-                        status: 'success',
-                        response: response
-                      });
+                      if (response && response.error) {
+                        report({
+                          status: 'failed',
+                          order_id: '${orderId}',
+                          error: response.error
+                        });
+                      } else if (response && response.paymentDetails) {
+                        report({
+                          status: 'payment_completed',
+                          order_id: '${orderId}',
+                          response: response
+                        });
+                      } else if (response && response.redirect) {
+                        updateStatus('Redirecting...');
+                      } else {
+                        report({
+                          status: 'cancelled',
+                          order_id: '${orderId}',
+                          response: response
+                        });
+                      }
                     })
                     .catch(function(error) {
                       report({
                         status: 'failed',
+                        order_id: '${orderId}',
                         error: error
                       });
                     });
@@ -274,14 +293,14 @@ export default function WalletScreen({ navigation }) {
     setIsSubmitting(true);
 
     try {
-      await apiService.verifyDeposit({
+      const res = await apiService.verifyDeposit({
         provider: 'cashfree',
         order_id: orderId,
       });
 
       Alert.alert(
         'Success',
-        'Deposit successful and balance updated!',
+        res.message || 'Deposit successful and balance updated!',
         [
           {
             text: 'OK',
@@ -294,9 +313,11 @@ export default function WalletScreen({ navigation }) {
       );
     } catch (err) {
       Alert.alert(
-        'Verification Failed',
-        err.message || 'Deposit verification failed'
+        'Payment Incomplete',
+        err.message || 'Deposit verification failed. Amount was not added.'
       );
+      fetchWalletDetails();
+      hideAction();
     } finally {
       setIsSubmitting(false);
     }
@@ -306,37 +327,39 @@ export default function WalletScreen({ navigation }) {
   const handleCashfreeMessage = async (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      const orderId =
+        data.order_id ||
+        currentOrder?.order_id ||
+        currentOrder?.orderId;
 
-      if (data.status === 'success') {
-        const orderId =
-          data.order_id ||
-          currentOrder?.order_id ||
-          currentOrder?.orderId;
-        
+      if (data.status === 'success' || data.status === 'payment_completed') {
         if (orderId) {
           triggerVerification(orderId);
         } else {
           Alert.alert('Verification Failed', 'Order ID not found');
+          hideAction();
         }
-
       } else if (data.status === 'failed') {
+        setShowSandboxModal(false);
         Alert.alert(
-          'Payment Failed',
-          data.error?.message ||
-            'Cashfree checkout transaction failed'
+          'Payment Incomplete',
+          data.error?.message || 'Payment was not completed.'
         );
-
+        hideAction();
+      } else if (data.status === 'cancelled') {
+        setShowSandboxModal(false);
+        Alert.alert(
+          'Payment Cancelled',
+          'You stopped or cancelled the payment process.'
+        );
+        hideAction();
       } else if (data.status === 'js_error') {
+        setShowSandboxModal(false);
         Alert.alert(
           'Checkout Error',
-          data.message ||
-            'Cashfree checkout error occurred'
+          data.message || 'Cashfree checkout error occurred'
         );
-
-        console.log(
-          'Cashfree JS error details:',
-          data
-        );
+        hideAction();
       }
     } catch (e) {
       console.log(
@@ -349,117 +372,136 @@ export default function WalletScreen({ navigation }) {
 
   // ─── Fetch Wallet Details ──────────────────────────────────────────────────
   const fetchWalletDetails = async () => {
-  try {
-    // Get wallet balance
-    const balRes = await apiService.getWalletBalance();
+    try {
+      // Get wallet balance
+      const balRes = await apiService.getWalletBalance();
 
-    console.log('WALLET BALANCE API RESPONSE:', balRes);
+      console.log('WALLET BALANCE API RESPONSE:', balRes);
 
-    // Support different API response structures
-    const serverBalance =
-      balRes?.balance ??
-      balRes?.wallet_balance ??
-      balRes?.current_balance ??
-      balRes?.data?.balance ??
-      balRes?.data?.wallet_balance ??
-      balRes?.data?.current_balance ??
-      0;
+      // Support different API response structures
+      const serverBalance =
+        balRes?.balance ??
+        balRes?.wallet_balance ??
+        balRes?.current_balance ??
+        balRes?.data?.balance ??
+        balRes?.data?.wallet_balance ??
+        balRes?.data?.current_balance ??
+        0;
 
-    const parsedBalance = Number(serverBalance);
+      const parsedBalance = Number(serverBalance);
 
-    console.log('PARSED WALLET BALANCE:', parsedBalance);
+      console.log('PARSED WALLET BALANCE:', parsedBalance);
 
-    setBalance(
-      Number.isFinite(parsedBalance)
-        ? parsedBalance
-        : 0
-    );
+      setBalance(
+        Number.isFinite(parsedBalance)
+          ? parsedBalance
+          : 0
+      );
 
-    // Get transactions
-    const txRes = await apiService.getTransactions();
+      // Get transactions
+      const txRes = await apiService.getTransactions();
 
-    console.log('TRANSACTIONS API RESPONSE:', txRes);
+      console.log('TRANSACTIONS API RESPONSE:', txRes);
 
-    const transactionList = Array.isArray(txRes)
-      ? txRes
-      : Array.isArray(txRes?.data)
-      ? txRes.data
-      : Array.isArray(txRes?.transactions)
-      ? txRes.transactions
-      : Array.isArray(txRes?.data?.transactions)
-      ? txRes.data.transactions
-      : [];
+      const transactionList = Array.isArray(txRes)
+        ? txRes
+        : Array.isArray(txRes?.data)
+        ? txRes.data
+        : Array.isArray(txRes?.transactions)
+        ? txRes.transactions
+        : Array.isArray(txRes?.data?.transactions)
+        ? txRes.data.transactions
+        : [];
 
-    const mapTxnType = (type) => {
-      if (
-        type === 'deposit' ||
-        type === 'win_credit' ||
-        type === 'refund'
-      ) {
-        return 'credit';
-      }
+      const mapTxnType = (type) => {
+        if (
+          type === 'deposit' ||
+          type === 'win_credit' ||
+          type === 'refund'
+        ) {
+          return 'credit';
+        }
 
-      if (
-        type === 'withdraw' ||
-        type === 'bet_debit'
-      ) {
-        return 'debit';
-      }
+        if (
+          type === 'withdraw' ||
+          type === 'bet_debit'
+        ) {
+          return 'debit';
+        }
 
-      return 'trophy';
-    };
+        return 'trophy';
+      };
 
-    const mapped = transactionList.map((t) => ({
-      id: t.id,
+      const mapped = transactionList.map((t) => {
+        const isCredit =
+          t.transaction_type === 'deposit' ||
+          t.transaction_type === 'win_credit' ||
+          t.transaction_type === 'refund';
 
-      type: mapTxnType(t.transaction_type),
+        const rawStatus = (t.status || 'pending').toLowerCase();
+        const displayStatus = rawStatus.toUpperCase();
 
-      title:
-        t.note ||
-        (
-          t.transaction_type === 'deposit'
-            ? 'Deposit via PhonePe'
-            : 'Game Round Bet'
-        ),
+        let statusColor = '#EAB308'; // Amber for pending
+        if (
+          rawStatus === 'success' ||
+          rawStatus === 'approved' ||
+          rawStatus === 'paid'
+        ) {
+          statusColor = isCredit ? '#22c55e' : '#FFA800';
+        } else if (
+          rawStatus === 'failed' ||
+          rawStatus === 'rejected'
+        ) {
+          statusColor = '#EF4444';
+        }
 
-      date: new Date(
-        t.created_at
-      ).toLocaleDateString(),
+        let title = t.note;
+        if (!title) {
+          if (t.transaction_type === 'deposit') {
+            title = 'Deposit via Cashfree';
+          } else if (t.transaction_type === 'withdraw') {
+            title = 'Withdraw Request';
+          } else if (t.transaction_type === 'win_credit') {
+            title = 'Game Round Win';
+          } else if (t.transaction_type === 'bet_debit') {
+            title = 'Game Round Bet';
+          } else if (t.transaction_type === 'refund') {
+            title = 'Refund Credited';
+          } else {
+            title = 'Transaction';
+          }
+        }
 
-      amount:
-        t.transaction_type === 'deposit' ||
-        t.transaction_type === 'win_credit' ||
-        t.transaction_type === 'refund'
-          ? `+₹${Number(t.amount).toLocaleString(
-              undefined,
-              {
+        return {
+          id: t.id,
+          rawAmount: Number(t.amount) || 0,
+          status: rawStatus,
+          displayStatus: displayStatus,
+          statusColor: statusColor,
+          transactionType: t.transaction_type,
+          type: mapTxnType(t.transaction_type),
+          title: title,
+          date: new Date(t.created_at).toLocaleDateString(),
+          amount: isCredit
+            ? `+₹${Number(t.amount).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
-              }
-            )}`
-          : `-₹${Number(t.amount).toLocaleString(
-              undefined,
-              {
+              })}`
+            : `-₹${Number(t.amount).toLocaleString(undefined, {
                 minimumFractionDigits: 2,
-              }
-            )}`,
+              })}`,
+          color: statusColor,
+        };
+      });
 
-      color:
-        t.transaction_type === 'deposit' ||
-        t.transaction_type === 'win_credit' ||
-        t.transaction_type === 'refund'
-          ? '#22c55e'
-          : '#FFA800',
-    }));
+      setTransactions(mapped);
 
-    setTransactions(mapped);
-
-  } catch (err) {
-    console.log(
-      'Error fetching wallet details:',
-      err
-    );
-  }
-};
+    } catch (err) {
+      console.log(
+        'Error fetching wallet details:',
+        err
+      );
+    }
+  };
 
   // ─── Initial Load ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -638,23 +680,19 @@ export default function WalletScreen({ navigation }) {
     let sum = 0;
 
     transactions.forEach((t) => {
-      if (t.type === 'credit') {
-        const amt = parseFloat(
-          String(t.amount).replace(
-            /[^0-9.]/g,
-            ''
-          )
-        );
-
-        if (!isNaN(amt)) {
-          sum += amt;
-        }
+      // ONLY sum successful deposits!
+      if (
+        t.transactionType === 'deposit' &&
+        t.status === 'success'
+      ) {
+        sum += t.rawAmount || 0;
       }
     });
 
-    return sum > 0
-      ? `₹ ${sum.toLocaleString()}`
-      : '₹ 0';
+    return `₹ ${sum.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   // ─── Total Withdraw ───────────────────────────────────────────────────────
@@ -662,23 +700,19 @@ export default function WalletScreen({ navigation }) {
     let sum = 0;
 
     transactions.forEach((t) => {
-      if (t.type === 'debit') {
-        const amt = parseFloat(
-          String(t.amount).replace(
-            /[^0-9.]/g,
-            ''
-          )
-        );
-
-        if (!isNaN(amt)) {
-          sum += amt;
-        }
+      // ONLY sum approved / successful / paid withdrawals!
+      if (
+        t.transactionType === 'withdraw' &&
+        (t.status === 'success' || t.status === 'approved' || t.status === 'paid')
+      ) {
+        sum += t.rawAmount || 0;
       }
     });
 
-    return sum > 0
-      ? `₹ ${sum.toLocaleString()}`
-      : '₹ 0';
+    return `₹ ${sum.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   // ─── Filtered Transactions ────────────────────────────────────────────────
@@ -1080,9 +1114,12 @@ export default function WalletScreen({ navigation }) {
 
                     subtitle: `${txn.title} • ${txn.date}`,
 
-                    status: 'WoNO',
+                    status: txn.status,
+                    displayStatus: txn.displayStatus,
+                    statusColor: txn.statusColor,
 
                     amount: txn.amount,
+                    color: txn.color,
 
                     // Safe value — never undefined
                     avatarColor:

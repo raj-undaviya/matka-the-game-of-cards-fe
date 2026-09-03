@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 // export const API_BASE_URL = 'https://matka-the-game-of-cards-be.vercel.app/api';
 export const API_BASE_URL =
   Platform.OS === "android"
-  ? "http://192.168.1.6:8000/api"
+  ? "http://192.168.0.104:8000/api"
   : "https://backend.matka-game.binaries.org.in/api";
 
 let authToken = null;
@@ -88,6 +88,25 @@ export const apiService = {
   },
 
   // ── Game APIs ──
+  getGames: async () => {
+    const response = await fetch(`${API_BASE_URL}/game/games/`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  getPools: async (variation) => {
+    const url = variation
+      ? `${API_BASE_URL}/game/pools/?variation=${variation}`
+      : `${API_BASE_URL}/game/pools/`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   getRounds: async (variation) => {
     const url = variation
       ? `${API_BASE_URL}/game/rounds/?variation=${variation}`

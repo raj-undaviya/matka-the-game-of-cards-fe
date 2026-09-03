@@ -116,8 +116,8 @@ export default function TransactionHistory({
 
                 {/* Right content status & amount */}
                 <View style={styles.txnRight}>
-                  <Text style={styles.statusLabel}>
-                    {txn.status || 'WON'}
+                  <Text style={[styles.statusLabel, txn.statusColor ? { color: txn.statusColor } : null]}>
+                    {txn.displayStatus || txn.status || 'WON'}
                   </Text>
                   <Text style={[styles.amountText, { color: txn.color || '#22c55e' }]}>
                     {txn.amount}
