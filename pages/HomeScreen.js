@@ -18,9 +18,10 @@ import { FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icon
 import { homeScreenStyles } from '../styles/GlobalStyle';
 import DarkPanelBackground from '../components/DarkPanelBackground';
 
-const gameVariations = [
+const defaultGameVariations = [
   {
     id: 1,
+    variation: 'V1',
     name: 'SINGLE CARD GAME',
     subTitle: 'ENTRY FEES.🪙100',
     rewards: '30x',
@@ -31,69 +32,63 @@ const gameVariations = [
   },
   {
     id: 5,
+    variation: 'V2',
     name: 'PAIR SELECTION',
     subTitle: 'ENTRY FEES.🪙100',
     rewards: '20x',
     poolValue: '🪙2,105',
-  
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#06B6D4', '#0891B2', '#003d4d'],
     rewardLabel: '20x',
   },
   {
     id: 2,
+    variation: 'V3',
     name: 'TRIO GAME TION AU',
     subTitle: 'ENTRY FEES.🪙100',
     rewards: '32x',
     poolValue: '🪙2,105',
-    
-  
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#2EA043', '#16752E', '#093D15'],
     rewardLabel: '50x',
   },
   {
     id: 3,
+    variation: 'V4',
     name: 'LAST DIGIT SUM',
     subTitle: 'ENTRY FEES.🪙100',
     rewards: '33x',
     poolValue: '🪙875',
-   
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#FF3B30', '#C20005', '#5E0002'],
     rewardLabel: '80x',
   },
   {
     id: 4,
+    variation: 'V5',
     name: 'LUCKLY DRAW JACCPOT',
     subTitle: 'ENTRY FEES.🪙100',
     rewards: '23x',
     poolValue: '🪙805',
-  
     bgColors: ['#1C1C1C', '#000000'],
     sphereColors: ['#7C3AED', '#5B21B6', '#3B0764'],
     rewardLabel: '80x',
   },
 ];
 
-const getMedalImage = (id) => {
-  switch (id) {
-    case 1:
-      return require('../assets/images/medal_single.png');
-    case 5:
-      return require('../assets/images/medal_pair.png');
-    case 2:
-      return require('../assets/images/medal_trio.png');
-    case 3:
-      return require('../assets/images/medal_sum.png');
-    case 4:
-      return require('../assets/images/medal_jackpot.png');
-    default:
-      return require('../assets/images/medal_single.png');
-  }
+const getMedalImage = (id, variation, imageUrl) => {
+  const img = (imageUrl || '').toLowerCase();
+  if (img.includes('pair') || variation === 'V2' || id === 5) return require('../assets/images/medal_pair.png');
+  if (img.includes('trio') || variation === 'V3' || id === 2) return require('../assets/images/medal_trio.png');
+  if (img.includes('sum') || variation === 'V4' || id === 3) return require('../assets/images/medal_sum.png');
+  if (img.includes('jackpot') || variation === 'V5' || id === 4) return require('../assets/images/medal_jackpot.png');
+  return require('../assets/images/medal_single.png');
 };
 
 const AwardMedal = ({ game }) => {
+  const imgUrl = game.imageUrl || game.image_url || '';
+  const isNetworkImage = imgUrl.startsWith('http://') || imgUrl.startsWith('https://') || imgUrl.startsWith('data:');
+
   return (
     <View style={homeScreenStyles.medalCardOuterFrame}>
       <View style={homeScreenStyles.medalCardContainer}>
@@ -105,12 +100,20 @@ const AwardMedal = ({ game }) => {
           ))}
         </View>
 
-        {/* Premium generated badge image for specific multiplier */}
-        <Image
-          source={getMedalImage(game.id)}
-          style={homeScreenStyles.badgeImage}
-          resizeMode="contain"
-        />
+        {/* Dynamic Image from remote URL or local medal asset */}
+        {isNetworkImage ? (
+          <Image
+            source={{ uri: imgUrl }}
+            style={homeScreenStyles.badgeImage}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={getMedalImage(game.id, game.variation, imgUrl)}
+            style={homeScreenStyles.badgeImage}
+            resizeMode="contain"
+          />
+        )}
 
       </View>
     </View>
@@ -120,16 +123,12 @@ const AwardMedal = ({ game }) => {
 const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, onHelpPress }) => {
   return (
     <View style={homeScreenStyles.headerWrapper}>
-      {/* Background Deep Maroon Gradient */}
       <LinearGradient
         colors={['#2E0002', '#4B0002', '#6E0003']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={homeScreenStyles.headerGradient}
       >
-        {/* Slightly brighter red-orange glow beam rising from bottom-center */}
-        
-        {/* Scattered small star/sparkle particles (low opacity) */}
         <View style={[homeScreenStyles.headerSparkle, { top: 8, left: '14%', opacity: 0.12 }]}><Text style={homeScreenStyles.sparkleChar}>★</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { top: 32, left: '24%', opacity: 0.18 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { top: 12, left: '44%', opacity: 0.1 }]}><Text style={homeScreenStyles.sparkleChar}>★</Text></View>
@@ -138,11 +137,9 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
         <View style={[homeScreenStyles.headerSparkle, { top: 38, right: '8%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { top: 8, right: '6%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
         <View style={[homeScreenStyles.headerSparkle, { bottom: 38, right: '4%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
-         <View style={[homeScreenStyles.headerSparkle,{ top: 60, right: '45%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
-        {/* Main Content Layout */}
-        <View style={homeScreenStyles.headerContent}>
+        <View style={[homeScreenStyles.headerSparkle, { top: 60, right: '45%', opacity: 0.2 }]}><Text style={homeScreenStyles.sparkleChar}>✦</Text></View>
 
-          {/* Left Side: Circular gold-bordered play badge */}
+        <View style={homeScreenStyles.headerContent}>
           <TouchableOpacity
             onPress={onHelpPress}
             activeOpacity={0.85}
@@ -153,12 +150,10 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
             </View>
           </TouchableOpacity>
 
-          {/* Centered Title */}
           <View style={homeScreenStyles.headerTitleContainer} pointerEvents="none">
             <Text style={homeScreenStyles.headerTitleText}>{title.toUpperCase()}</Text>
           </View>
 
-          {/* Right Side: Circular gold-bordered wallet badge with value */}
           <TouchableOpacity
             onPress={onBadgePress}
             activeOpacity={0.85}
@@ -169,20 +164,16 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
             </View>
             <Text style={homeScreenStyles.rightBadgeText}>{badgeValue}</Text>
           </TouchableOpacity>
-
         </View>
       </LinearGradient>
 
-      {/* Bottom edge: glowing curved gold-orange line with mask */}
       <View style={homeScreenStyles.headerBottomCurveContainer} pointerEvents="none">
-        {/* Glow Line Ellipse */}
         <LinearGradient
           colors={['rgba(218, 165, 32, 0)', 'rgba(255, 120, 0, 1)', 'rgba(255, 215, 0, 1)', 'rgba(255, 120, 0, 1)', 'rgba(218, 165, 32, 0)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={homeScreenStyles.headerBottomCurveLine}
         />
-        {/* Cover Ellipse */}
         <View style={homeScreenStyles.headerBottomCurveCover} />
       </View>
     </View>
@@ -192,13 +183,48 @@ const PremiumHeader = ({ title = 'WIRA SLOT', badgeValue = '3', onBadgePress, on
 const HomeScreen = ({ navigation }) => {
   const { logout } = useContext(AuthContext);
   const [balance, setBalance] = useState(0);
+  const [games, setGames] = useState(defaultGameVariations);
   const isFocused = useIsFocused();
+
+  // Helper mapping variation to standard screen ID
+  const mapVariationToId = (variation, currentId) => {
+    if (variation === 'V1') return 1;
+    if (variation === 'V2') return 5;
+    if (variation === 'V3') return 2;
+    if (variation === 'V4') return 3;
+    if (variation === 'V5') return 4;
+    return currentId || 1;
+  };
 
   useEffect(() => {
     if (isFocused) {
+      // 1. Fetch balance
       apiService.getWalletBalance()
         .then(res => setBalance(res.balance))
         .catch(err => console.log('Error fetching balance:', err));
+
+      // 2. Fetch dynamic games list from backend
+      apiService.getGames()
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            const formatted = data.map((g) => ({
+              id: mapVariationToId(g.variation, g.id),
+              dbId: g.id,
+              variation: g.variation,
+              name: g.name,
+              subTitle: g.sub_title || g.subtitle || 'ENTRY FEES.🪙100',
+              rewards: g.rewards || '10x',
+              poolValue: g.pool_value || g.poolValue || '🪙1,000',
+              imageUrl: g.image_url || g.imageUrl || '',
+              description: g.description || '',
+              rewardLabel: g.reward_label || '10x',
+            }));
+            setGames(formatted);
+          }
+        })
+        .catch((err) => {
+          console.log('Error loading dynamic games, using defaults:', err);
+        });
     }
   }, [isFocused]);
 
@@ -239,7 +265,7 @@ const HomeScreen = ({ navigation }) => {
               {/* Inner Header Label Section */}
               <View style={homeScreenStyles.boardHeaderRow}>
                 <View style={homeScreenStyles.boardHeaderLeftGroup}>
-                   <FontAwesome name="star" size={10} color="#DAA520" />
+                  <FontAwesome name="star" size={10} color="#DAA520" />
                   <FontAwesome name="star" size={10} color="#DAA520" />
                 </View>
                 <Text style={homeScreenStyles.boardHeaderTitle}>SELECT A GAME MODE</Text>
@@ -250,41 +276,36 @@ const HomeScreen = ({ navigation }) => {
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={homeScreenStyles.scrollContent}>
-                {gameVariations.map((game) => (
-                  <DarkPanelBackground key={game.id} style={homeScreenStyles.cardOuter}>
-                    {/* Card click routes to ContestPool with gameId parameter */}
+                {games.map((game) => (
+                  <DarkPanelBackground key={`${game.id}-${game.variation}-${game.name}`} style={homeScreenStyles.cardOuter}>
+                    {/* Card click routes to ContestPool with dynamic game details */}
                     <TouchableOpacity
                       style={homeScreenStyles.cardTouchRow}
-                      onPress={() => navigation.navigate('ContestPool', { gameId: game.id })}
+                      onPress={() => navigation.navigate('ContestPool', {
+                        gameId: game.id,
+                        gameVariation: game.variation,
+                        gameName: game.name,
+                        gameReward: game.rewards,
+                      })}
                       activeOpacity={0.8}
                     >
 
-                      {/* Left: Medal Block */}
+                      {/* Left: Medal / Image Block */}
                       <AwardMedal game={game} />
 
                       {/* Right: Game Info */}
                       <View style={homeScreenStyles.infoSection}>
                         <View style={homeScreenStyles.titleRow}>
-                          <View>
-                            <Text style={homeScreenStyles.gameName}>{game.name}</Text>
-                            <Text style={homeScreenStyles.gameSubTitle}>{game.subTitle}</Text>
+                          <Text style={homeScreenStyles.gameName}>{game.name}</Text>
+                        </View>
+
+                        {game.description ? (
+                          <View style={{ marginTop: 4 }}>
+                            <Text numberOfLines={2} style={{ color: '#B0B0B0', fontSize: 11, fontWeight: '500', lineHeight: 15 }}>
+                              {game.description}
+                            </Text>
                           </View>
-                          
-                        </View>
-
-                        <View style={homeScreenStyles.detailsRow}>
-                          <Text style={homeScreenStyles.detailsTextLeft}>
-                            REWARDS | <Text style={homeScreenStyles.goldMultiplierText}>{game.rewards}</Text>
-                          </Text>
-                          <Text style={homeScreenStyles.detailsTextRight}>
-                            {game.poolValue}
-                          </Text>
-                        </View>
-
-                        <View style={homeScreenStyles.footerRow}>
-                          <Text style={homeScreenStyles.footerTextLeft}>{game.codeLeft}</Text>
-                          <Text style={homeScreenStyles.footerTextRight}>{game.codeRight}</Text>
-                        </View>
+                        ) : null}
                       </View>
 
                     </TouchableOpacity>
