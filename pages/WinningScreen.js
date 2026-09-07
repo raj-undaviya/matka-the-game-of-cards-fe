@@ -50,7 +50,12 @@ const getAvatarData = (id) => {
     { emoji: '🧑', bg: '#1abc9c' },
     { emoji: '👨', bg: '#34495e' }
   ];
-  return avatars[id % avatars.length];
+  const str = String(id ?? '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return avatars[hash % avatars.length] || avatars[0];
 };
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -303,8 +308,8 @@ export default function WalletScreen({ navigation }) {
                 return (
                   <View key={txn.id} style={styles.txnItem}>
                     <View style={styles.txnLeft}>
-                      <View style={[styles.avatarContainer, { backgroundColor: avatar.bg }]}>
-                        <Text style={styles.avatarText}>{avatar.emoji}</Text>
+                      <View style={[styles.avatarContainer, { backgroundColor: avatar?.bg || '#4e5d78' }]}>
+                        <Text style={styles.avatarText}>{avatar?.emoji || '👤'}</Text>
                       </View>
                       <View style={styles.txnInfo}>
                         <Text style={styles.txnTitle} numberOfLines={1}>{txn.title}</Text>
