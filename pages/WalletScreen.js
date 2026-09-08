@@ -401,8 +401,6 @@ export default function WalletScreen({ navigation }) {
       // Get transactions
       const txRes = await apiService.getTransactions();
 
-      console.log('TRANSACTIONS API RESPONSE:', txRes);
-
       const transactionList = Array.isArray(txRes)
         ? txRes
         : Array.isArray(txRes?.data)
