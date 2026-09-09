@@ -104,7 +104,7 @@ export default function ContestPoolScreen({ route, navigation }) {
     };
   }, [variation, isFocused]);
 
-  // Reverse 1-minute countdown timer (Dream11 style)
+  // Reverse 5-minute countdown timer (10 rounds pool)
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -113,7 +113,7 @@ export default function ContestPoolScreen({ route, navigation }) {
         if (prev <= 1) {
           // Timer reached 0! Refresh to get newly spawned upper slot pool
           fetchPoolsData();
-          return 60;
+          return 300;
         }
         return prev - 1;
       });
@@ -134,11 +134,14 @@ export default function ContestPoolScreen({ route, navigation }) {
     console.log('Joining pool:', pool.name, 'Slot:', pool.slotNumber);
     
     const screenParams = { 
-      roundId: pool.id, 
+      roundId: pool.id,
+      poolId: pool.poolId,
       entryFee: pool.entryFee, 
       winningPrize: pool.winningPrize,
       reward: pool.rewardMultiplier,
       slotNumber: pool.slotNumber,
+      roundNumber: 1,
+      totalRounds: 10,
     };
 
     if (pool.poolId) {
@@ -164,7 +167,7 @@ export default function ContestPoolScreen({ route, navigation }) {
     } else if (variation === 'V5' || gameId === 4) {
       navigation.navigate('LuckyDraw', screenParams);
     } else {
-      navigation.navigate('SingleCard', screenParams);
+      navigation.navigate('PairSelection', screenParams);
     }
   };
 
