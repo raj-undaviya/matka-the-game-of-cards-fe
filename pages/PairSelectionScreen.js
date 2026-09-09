@@ -1,36 +1,68 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity,
-  SafeAreaView, Alert, Dimensions,
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  Dimensions,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { apiService } from '../services/apiService';
-import { pairSelectionStyles as styles } from '../styles/GlobalStyle';
 
 const { width } = Dimensions.get('window');
-const CARD_SIZE = (width - 80) / 5;
+const CARD_SIZE = (width - 70) / 5;
 
 const cards = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const suits = ['♠', '♥', '♦', '♣'];
 
 export default function PairSelectionGameScreen({ route, navigation }) {
-  const { roundId, entryFee = 150, winningPrize = 3000, reward = '20x' } = route.params || {};
+  const {
+    roundId: initialRoundId,
+    poolId,
+    entryFee = 150,
+    winningPrize = 3000,
+    reward = '20x',
+    roundNumber = 1,
+    totalRounds = 10,
+    slotNumber = 1,
+  } = route.params || {};
 
+  const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
   const [selectedCards, setSelectedCards] = useState([]);
-  const [timer, setTimer] = useState(60);
+  const [timer, setTimer] = useState(30);
   const [balance, setBalance] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Fetch wallet balance
     apiService.getWalletBalance()
-      .then(res => setBalance(res.balance))
+      .then(res => setBalance(res.balance || res.current_balance || 0))
       .catch(err => console.log('Error fetching balance:', err));
 
+    // Resolve active round if missing
+    if (!activeRoundId && poolId) {
+      apiService.getPoolLeaderboard(poolId)
+        .then(res => {
+          if (res.active_round_id) {
+            setActiveRoundId(res.active_round_id);
+          }
+        })
+        .catch(err => console.log('Error fetching pool round:', err));
+    }
+
     const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      setTimer((prev) => (prev > 0 ? prev - 1 : 30));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [poolId, initialRoundId]);
 
   const handleCardSelect = (card) => {
     if (selectedCards.includes(card)) {
@@ -38,36 +70,80 @@ export default function PairSelectionGameScreen({ route, navigation }) {
     } else if (selectedCards.length < 2) {
       setSelectedCards([...selectedCards, card]);
     } else {
-      Alert.alert('Limit Reached', 'You can only select 2 cards');
+      Alert.alert('Limit Reached', 'You can only select 2 cards for a Pair');
     }
   };
 
   const handlePlaceBet = () => {
     if (selectedCards.length !== 2) {
-      Alert.alert('Invalid Selection', 'Please select exactly 2 cards');
+      Alert.alert('Invalid Selection', 'Please select exactly 2 cards (Open & Close)');
       return;
     }
+
     Alert.alert(
-      'Confirm Bet',
-      `Place bet on ${selectedCards.join(' & ')}?\nEntry Fee: ₹${entryFee}`,
+      'Confirm Pair Bet',
+      `Place bet on [ ${selectedCards.join(' & ')} ] for Round ${roundNumber} of ${totalRounds}?\nEntry Fee: ₹${entryFee}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm',
+          text: 'Confirm & Place',
           onPress: async () => {
+            setLoading(true);
             try {
+              let rId = activeRoundId;
+              if (!rId && poolId) {
+                const lb = await apiService.getPoolLeaderboard(poolId);
+                rId = lb.active_round_id;
+              }
+
+              if (!rId) {
+                const rounds = await apiService.getRounds('V2');
+                if (rounds && rounds.length > 0) {
+                  rId = rounds[0].id;
+                }
+              }
+
+              if (!rId) {
+                Alert.alert('Error', 'Unable to find an active round. Please try again.');
+                setLoading(false);
+                return;
+              }
+
               const numList = selectedCards.map(c => c === 'A' ? 1 : Number(c));
-              await apiService.placeBet(roundId, numList, entryFee);
-              
+              await apiService.placeBet(rId, numList, entryFee);
+
               navigation.replace('LiveGame', {
                 gameType: 'pair',
-                roundId,
+                roundId: rId,
+                poolId,
                 selectedCards: selectedCards.join(','),
                 entryFee,
                 reward,
+                winningPrize,
+                roundNumber,
+                totalRounds,
+                slotNumber,
               });
             } catch (err) {
-              Alert.alert('Bet Error', err.message || 'Failed to place bet');
+              const errMsg = err.message || 'Failed to place bet';
+              if (errMsg.includes('already placed')) {
+                navigation.replace('LiveGame', {
+                  gameType: 'pair',
+                  roundId: activeRoundId,
+                  poolId,
+                  selectedCards: selectedCards.join(','),
+                  entryFee,
+                  reward,
+                  winningPrize,
+                  roundNumber,
+                  totalRounds,
+                  slotNumber,
+                });
+              } else {
+                Alert.alert('Bet Notice', errMsg);
+              }
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -76,91 +152,458 @@ export default function PairSelectionGameScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient colors={['#001a2d', '#000d1a']} style={styles.gradient}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButton}>← Back</Text>
+    <LinearGradient colors={['#5a0000', '#120000']} style={styles.mainBackground}>
+      <SafeAreaView style={styles.safeContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#5a0000" />
+
+        {/* ── Top Header Row (Matches ContestPoolScreen) ── */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Pair Selection</Text>
-          <View style={styles.coinBalance}>
-            <Text style={styles.coinText}>🪙 {Number(balance).toLocaleString()}</Text>
+
+          <View style={styles.chainDecorContainer}>
+            <Svg height="30" width="140" viewBox="0 0 140 30" style={styles.chainSvg}>
+              <Path
+                d="M 5,0 Q 70,28 135,0"
+                fill="none"
+                stroke="#D4AF37"
+                strokeWidth="2"
+                strokeDasharray="4 4"
+              />
+              <Circle cx="70" cy="14" r="2.5" fill="#D4AF37" />
+            </Svg>
+            <View style={styles.chainStar}>
+              <FontAwesome name="star" size={13} color="#FFF5C2" />
+            </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.walletBtn}
+            onPress={() => navigation.navigate('Wallet')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.walletBtnText}>₹{Number(balance).toLocaleString()}</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.infoBar}>
-          {[
-            { label: 'Timer', value: `${timer}s`, color: timer < 10 ? '#FF6B6B' : '#fff' },
-            { label: 'Selected', value: `${selectedCards.length}/2` },
-            { label: 'Reward', value: 'x20', color: '#06B6D4' },
-          ].map((item, i) => (
-            <View key={i} style={styles.infoItem}>
-              <Text style={styles.infoLabel}>{item.label}</Text>
-              <Text style={[styles.infoValue, item.color ? { color: item.color } : {}]}>
-                {item.value}
+        {/* ── Main Frame (Gold Border Frame matching ContestPool) ── */}
+        <View style={styles.cardWrapper}>
+          <LinearGradient
+            colors={['rgba(78, 8, 8, 0.85)', 'rgba(30, 3, 3, 0.95)']}
+            style={styles.cardContent}
+          >
+            {/* Centered Contest Header */}
+            <View style={styles.cardHeader}>
+              <View style={styles.headerLine} />
+              <Text style={styles.cardTitle}>PAIR SELECTION</Text>
+              <View style={styles.headerLine} />
+            </View>
+
+            {/* Badges Bar */}
+            <View style={styles.badgesRow}>
+              <View style={styles.slotBadge}>
+                <Text style={styles.slotBadgeText}>SLOT #{slotNumber}</Text>
+              </View>
+
+              <View style={styles.roundBadge}>
+                <Text style={styles.roundBadgeText}>ROUND {roundNumber}/{totalRounds}</Text>
+              </View>
+
+              <View style={styles.timerBadge}>
+                <Ionicons name="time-outline" size={13} color={timer < 10 ? '#FF4444' : '#FFD700'} />
+                <Text style={[styles.timerBadgeText, timer < 10 && styles.timerUrgent]}>
+                  {timer}s Left
+                </Text>
+              </View>
+            </View>
+
+            {/* Sub-instruction */}
+            <View style={styles.instructionWrap}>
+              <Text style={styles.instructionTitle}>Pick 2 Cards (Open & Close)</Text>
+              <Text style={styles.instructionSub}>
+                {selectedCards.length === 0 && 'Select 2 cards to place your bet'}
+                {selectedCards.length === 1 && `Card 1: [ ${selectedCards[0]} ] — Pick 1 more`}
+                {selectedCards.length === 2 && `Selected Pair: [ ${selectedCards[0]} & ${selectedCards[1]} ]`}
               </Text>
             </View>
-          ))}
-        </View>
 
-        <View style={styles.gameArea}>
-          <Text style={styles.instruction}>Select Your Pair</Text>
-          <Text style={styles.subInstruction}>{selectedCards.length}/2 cards selected</Text>
+            {/* Cards Grid */}
+            <View style={styles.cardsContainer}>
+              {cards.map((card, index) => {
+                const isSelected = selectedCards.includes(card);
+                const isFirst = selectedCards[0] === card;
+                const suit = suits[index % 4];
+                const isRed = suit === '♥' || suit === '♦';
 
-          <View style={styles.cardsContainer}>
-            {cards.map((card, index) => {
-              const isSelected = selectedCards.includes(card);
-              const suit = suits[index % 4];
-              const isRed = suit === '♥' || suit === '♦';
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.card, isSelected && styles.selectedCard,
-                    { width: CARD_SIZE, height: CARD_SIZE * 1.4 }]}
-                  onPress={() => handleCardSelect(card)}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={isSelected ? ['#003d4d', '#06B6D4'] : ['#fff', '#f0f0f0']}
-                    style={styles.cardInner}
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.cardItem,
+                      isSelected && styles.cardItemSelected,
+                      { width: CARD_SIZE, height: CARD_SIZE * 1.38 },
+                    ]}
+                    onPress={() => handleCardSelect(card)}
+                    activeOpacity={0.75}
                   >
-                    <Text style={[styles.cardValue,
-                      { color: isSelected ? '#fff' : (isRed ? '#cc0000' : '#111') }]}>
-                      {card}
-                    </Text>
-                    <Text style={[styles.cardSuit,
-                      { color: isSelected ? '#fff' : (isRed ? '#cc0000' : '#111') }]}>
-                      {suit}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <LinearGradient
+                      colors={isSelected ? ['#FFD700', '#FFA000', '#D4AF37'] : ['#ffffff', '#f4f4f4']}
+                      style={styles.cardInner}
+                    >
+                      {isSelected && (
+                        <View style={styles.selectionIndexBadge}>
+                          <Text style={styles.selectionIndexText}>
+                            {isFirst ? '1' : '2'}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={[
+                        styles.cardValue,
+                        { color: isSelected ? '#000000' : (isRed ? '#C20005' : '#111827') }
+                      ]}>
+                        {card}
+                      </Text>
+                      <Text style={[
+                        styles.cardSuit,
+                        { color: isSelected ? '#000000' : (isRed ? '#C20005' : '#111827') }
+                      ]}>
+                        {suit}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-          <View style={styles.betInfo}>
-            <Text style={styles.betInfoText}>Entry Fee: ₹{entryFee}</Text>
-            <Text style={styles.betInfoText}>Win: ₹{winningPrize.toLocaleString()} ({reward})</Text>
-          </View>
-        </View>
+            {/* Pool Prize Strip */}
+            <View style={styles.prizeStrip}>
+              <View style={styles.prizeStripItem}>
+                <Text style={styles.prizeStripLabel}>ENTRY FEE</Text>
+                <Text style={styles.prizeStripValue}>₹{entryFee}</Text>
+              </View>
+              <View style={styles.prizeStripDivider} />
+              <View style={styles.prizeStripItem}>
+                <Text style={styles.prizeStripLabel}>WIN PRIZE</Text>
+                <Text style={[styles.prizeStripValue, { color: '#FFD700' }]}>
+                  ₹{Number(winningPrize).toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.prizeStripDivider} />
+              <View style={styles.prizeStripItem}>
+                <Text style={styles.prizeStripLabel}>MULTIPLIER</Text>
+                <Text style={[styles.prizeStripValue, { color: '#00C853' }]}>{reward}</Text>
+              </View>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.placeBetButton, selectedCards.length !== 2 && styles.disabledButton]}
-          onPress={handlePlaceBet}
-          disabled={selectedCards.length !== 2}
-        >
-          <LinearGradient
-            colors={selectedCards.length === 2 ? ['#06B6D4', '#0891B2'] : ['#555', '#333']}
-            style={styles.buttonGradient}
-          >
-            <Text style={styles.placeBetText}>
-              {selectedCards.length === 2
-                ? `PLACE BET · ${selectedCards.join(' & ')}`
-                : `SELECT ${2 - selectedCards.length} MORE`}
-            </Text>
+            {/* Bottom Place Bet CTA Button */}
+            <TouchableOpacity
+              style={[styles.placeBetBtn, selectedCards.length !== 2 && styles.disabledBtn]}
+              onPress={handlePlaceBet}
+              disabled={selectedCards.length !== 2 || loading}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={selectedCards.length === 2 ? ['#00C853', '#007E33'] : ['#475569', '#334155']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.placeBetGradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.placeBetBtnText}>
+                    {selectedCards.length === 2
+                      ? `PLACE BET · ${selectedCards.join(' & ')} (ROUND ${roundNumber}/${totalRounds})`
+                      : `SELECT ${2 - selectedCards.length} MORE CARD${2 - selectedCards.length > 1 ? 'S' : ''}`}
+                  </Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
           </LinearGradient>
-        </TouchableOpacity>
-      </LinearGradient>
-    </SafeAreaView>
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
+
+const styles = StyleSheet.create({
+  mainBackground: {
+    flex: 1,
+  },
+  safeContainer: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 6 : 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    height: 56,
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#6c0606',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  chainDecorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 30,
+  },
+  chainSvg: {
+    position: 'absolute',
+    top: 0,
+  },
+  chainStar: {
+    position: 'absolute',
+    top: 8,
+  },
+  walletBtn: {
+    backgroundColor: '#EAA015',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFF5C2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  walletBtnText: {
+    color: '#000',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  cardWrapper: {
+    flex: 1,
+    marginHorizontal: 14,
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+  },
+  cardContent: {
+    flex: 1,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  headerLine: {
+    height: 1,
+    width: 35,
+    backgroundColor: 'rgba(212, 175, 55, 0.6)',
+  },
+  cardTitle: {
+    color: '#FFD700',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginHorizontal: 10,
+    textTransform: 'uppercase',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  slotBadge: {
+    backgroundColor: '#262626',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#444444',
+  },
+  slotBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  roundBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  roundBadgeText: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  timerBadgeText: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  timerUrgent: {
+    color: '#FF4444',
+  },
+  instructionWrap: {
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  instructionTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  instructionSub: {
+    color: '#D4AF37',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 6,
+  },
+  cardItem: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  cardItemSelected: {
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
+    transform: [{ scale: 1.05 }],
+  },
+  cardInner: {
+    flex: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  selectionIndexBadge: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: '#000',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionIndexText: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  cardValue: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  cardSuit: {
+    fontSize: 16,
+    marginTop: -2,
+  },
+  prizeStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 15, 15, 0.85)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+    marginVertical: 6,
+  },
+  prizeStripItem: {
+    alignItems: 'center',
+  },
+  prizeStripLabel: {
+    color: '#888888',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  prizeStripValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  prizeStripDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#333333',
+  },
+  placeBetBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginTop: 6,
+    shadowColor: '#00C853',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  disabledBtn: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  placeBetGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeBetBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+});

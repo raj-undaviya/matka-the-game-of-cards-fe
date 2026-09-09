@@ -376,8 +376,6 @@ export default function WalletScreen({ navigation }) {
       // Get wallet balance
       const balRes = await apiService.getWalletBalance();
 
-      console.log('WALLET BALANCE API RESPONSE:', balRes);
-
       // Support different API response structures
       const serverBalance =
         balRes?.balance ??
@@ -404,12 +402,12 @@ export default function WalletScreen({ navigation }) {
       const transactionList = Array.isArray(txRes)
         ? txRes
         : Array.isArray(txRes?.data)
-        ? txRes.data
-        : Array.isArray(txRes?.transactions)
-        ? txRes.transactions
-        : Array.isArray(txRes?.data?.transactions)
-        ? txRes.data.transactions
-        : [];
+          ? txRes.data
+          : Array.isArray(txRes?.transactions)
+            ? txRes.transactions
+            : Array.isArray(txRes?.data?.transactions)
+              ? txRes.data.transactions
+              : [];
 
       const mapTxnType = (type) => {
         if (
@@ -482,11 +480,11 @@ export default function WalletScreen({ navigation }) {
           date: new Date(t.created_at).toLocaleDateString(),
           amount: isCredit
             ? `+₹${Number(t.amount).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}`
+              minimumFractionDigits: 2,
+            })}`
             : `-₹${Number(t.amount).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}`,
+              minimumFractionDigits: 2,
+            })}`,
           color: statusColor,
         };
       });
@@ -652,7 +650,7 @@ export default function WalletScreen({ navigation }) {
       Alert.alert(
         'Withdraw Requested',
         res.message ||
-          'Withdrawal request has been submitted to admin.',
+        'Withdrawal request has been submitted to admin.',
         [
           {
             text: 'OK',
@@ -781,7 +779,6 @@ export default function WalletScreen({ navigation }) {
             {/* ── Balance ── */}
             {(() => {
               const balanceStr = `₹${balance.toLocaleString()}`;
-              console.log('balanceStr --->', balanceStr)
 
               const splitIndex =
                 balanceStr.length - 2;
@@ -789,32 +786,32 @@ export default function WalletScreen({ navigation }) {
               const leftText =
                 splitIndex > 0
                   ? balanceStr.substring(
-                      0,
-                      splitIndex
-                    )
+                    0,
+                    splitIndex
+                  )
                   : balanceStr;
 
               const rightText =
                 splitIndex > 0
                   ? balanceStr.substring(
-                      splitIndex
-                    )
+                    splitIndex
+                  )
                   : '';
 
               return (
                 <View style={styles.balanceContainer}>
-  <Text style={styles.myWalletLabel}>
-    My Wallet
-  </Text>
+                  <Text style={styles.myWalletLabel}>
+                    My Wallet
+                  </Text>
 
-  <SplitGradientText
-    leftText={`₹${Number(balance).toLocaleString()}`}
-    rightText=""
-    leftColors={['#fce8a8', '#c98f2e']}
-    rightColors={['#fce8a8', '#c98f2e']}
-    fontSize={56}
-  />
-</View>
+                  <SplitGradientText
+                    leftText={`₹${Number(balance).toLocaleString()}`}
+                    rightText=""
+                    leftColors={['#fce8a8', '#c98f2e']}
+                    rightColors={['#fce8a8', '#c98f2e']}
+                    fontSize={56}
+                  />
+                </View>
               );
             })()}
 
@@ -934,8 +931,8 @@ export default function WalletScreen({ navigation }) {
                         style={[
                           localStyles.toggleTab,
                           withdrawMode ===
-                            'upi' &&
-                            localStyles.toggleTabActive,
+                          'upi' &&
+                          localStyles.toggleTabActive,
                         ]}
                         onPress={() =>
                           setWithdrawMode(
@@ -948,8 +945,8 @@ export default function WalletScreen({ navigation }) {
                           style={[
                             localStyles.toggleTabText,
                             withdrawMode ===
-                              'upi' &&
-                              localStyles.toggleTabTextActive,
+                            'upi' &&
+                            localStyles.toggleTabTextActive,
                           ]}
                         >
                           UPI
@@ -960,8 +957,8 @@ export default function WalletScreen({ navigation }) {
                         style={[
                           localStyles.toggleTab,
                           withdrawMode ===
-                            'bank' &&
-                            localStyles.toggleTabActive,
+                          'bank' &&
+                          localStyles.toggleTabActive,
                         ]}
                         onPress={() =>
                           setWithdrawMode(
@@ -974,8 +971,8 @@ export default function WalletScreen({ navigation }) {
                           style={[
                             localStyles.toggleTabText,
                             withdrawMode ===
-                              'bank' &&
-                              localStyles.toggleTabTextActive,
+                            'bank' &&
+                            localStyles.toggleTabTextActive,
                           ]}
                         >
                           Bank Transfer
@@ -1236,7 +1233,7 @@ export default function WalletScreen({ navigation }) {
                       'Checkout Error',
                       event.nativeEvent
                         .description ||
-                        'WebView failed to load'
+                      'WebView failed to load'
                     );
 
                     setShowSandboxModal(

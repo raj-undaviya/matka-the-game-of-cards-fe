@@ -5,13 +5,25 @@ import { Platform } from "react-native";
 // export const API_BASE_URL = 'https://matka-the-game-of-cards-be.vercel.app/api';
 export const API_BASE_URL =
   Platform.OS === "android"
-  ? "http://10.229.116.121:8000/api"
-  : "https://backend.matka-game.binaries.org.in/api";
+    ? "http://10.60.180.253:8000/api"
+    : "https://backend.matka-game.binaries.org.in/api";
 
 let authToken = null;
+let refreshToken = null;
+let onTokenUpdateCallback = null;
 
-export const setAuthToken = (token) => {
+export const setAuthToken = (token, refresh = null) => {
   authToken = token;
+  if (refresh) refreshToken = refresh;
+};
+
+export const setAuthTokens = (token, refresh = null) => {
+  authToken = token;
+  if (refresh) refreshToken = refresh;
+};
+
+export const setOnTokenUpdate = (callback) => {
+  onTokenUpdateCallback = callback;
 };
 
 const getHeaders = (extraHeaders = {}) => {
@@ -22,14 +34,32 @@ const getHeaders = (extraHeaders = {}) => {
   if (authToken) {
     headers["Authorization"] = `Bearer ${authToken}`;
   }
+  if (refreshToken) {
+    headers["X-Refresh-Token"] = refreshToken;
+  }
   return headers;
 };
 
 const handleResponse = async (response) => {
+  // Capture auto-refreshed tokens from backend response headers if present
+  try {
+    const newAccess = response.headers?.get?.("x-access-token") || response.headers?.get?.("X-Access-Token");
+    const newRefresh = response.headers?.get?.("x-refresh-token") || response.headers?.get?.("X-Refresh-Token");
+    if (newAccess) {
+      authToken = newAccess;
+      if (newRefresh) refreshToken = newRefresh;
+      if (onTokenUpdateCallback) {
+        onTokenUpdateCallback(newAccess, newRefresh || refreshToken);
+      }
+    }
+  } catch (e) {
+    // Ignore header inspection errors
+  }
+
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const errorMsg =
-      data.message || data.error || JSON.stringify(data) || "Request failed";
+      data.message || data.error || data.detail || JSON.stringify(data) || "Request failed";
     throw new Error(errorMsg);
   }
   return data;
@@ -147,6 +177,14 @@ export const apiService = {
     return handleResponse(response);
   },
 
+  getPoolLeaderboard: async (poolId) => {
+    const response = await fetch(`${API_BASE_URL}/game/pools/${poolId}/leaderboard/`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   getMyBets: async () => {
     const response = await fetch(`${API_BASE_URL}/game/bets/my/`, {
       method: "GET",
@@ -161,7 +199,6 @@ export const apiService = {
       method: "GET",
       headers: getHeaders(),
     });
-    console.log('response -->>>>>', response)
     return handleResponse(response);
   },
 

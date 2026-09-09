@@ -1,6 +1,6 @@
 // context/AuthContext.js
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { apiService, setAuthToken } from '../services/apiService';
+import { apiService, setAuthToken, setAuthTokens, setOnTokenUpdate } from '../services/apiService';
 
 // Defensive check to avoid crash if AsyncStorage is not yet installed
 let storage;
@@ -19,29 +19,52 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [token, setTokenState] = useState(null);
+  const [refreshToken, setRefreshTokenState] = useState(null);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Sync token to apiService and AsyncStorage
-  const updateToken = async (newToken) => {
-    setTokenState(newToken);
-    setAuthToken(newToken);
-    if (newToken) {
-      await storage.setItem('jwt_token', newToken);
+  const updateTokens = async (newAccess, newRefresh = null) => {
+    setTokenState(newAccess);
+    if (newRefresh) {
+      setRefreshTokenState(newRefresh);
+    }
+    setAuthTokens(newAccess, newRefresh);
+
+    if (newAccess) {
+      await storage.setItem('jwt_token', newAccess);
+      if (newRefresh) {
+        await storage.setItem('jwt_refresh_token', newRefresh);
+      }
     } else {
       await storage.removeItem('jwt_token');
+      await storage.removeItem('jwt_refresh_token');
       setUser(null);
+      setRefreshTokenState(null);
     }
   };
+
+  // Listen for background auto-refreshes from backend responses
+  useEffect(() => {
+    setOnTokenUpdate(async (newAccess, newRefresh) => {
+      setTokenState(newAccess);
+      if (newRefresh) setRefreshTokenState(newRefresh);
+      if (newAccess) await storage.setItem('jwt_token', newAccess);
+      if (newRefresh) await storage.setItem('jwt_refresh_token', newRefresh);
+    });
+  }, []);
 
   // Attempt auto-login on startup
   useEffect(() => {
     const bootstrapAsync = async () => {
       try {
         const storedToken = await storage.getItem('jwt_token');
-        if (storedToken) {
+        const storedRefresh = await storage.getItem('jwt_refresh_token');
+
+        if (storedToken || storedRefresh) {
           setTokenState(storedToken);
-          setAuthToken(storedToken);
+          setRefreshTokenState(storedRefresh);
+          setAuthTokens(storedToken, storedRefresh);
 
           // Verify token and fetch profile
           const profile = await apiService.getProfile();
@@ -50,7 +73,7 @@ export const AuthProvider = ({ children }) => {
       } catch (e) {
         console.log('Auto-login bootstrap failed:', e);
         // Clean up invalid tokens
-        await updateToken(null);
+        await updateTokens(null, null);
       } finally {
         setIsLoading(false);
       }
@@ -60,7 +83,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    console.log("Login ->>>", email, password)
     setIsLoading(true);
     try {
       const response = await apiService.login(email, password);
@@ -75,16 +97,17 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      // Response returns { message: "Login successful", data: { id, email, token, ... } }
+      // Response returns { message: "Login successful", data: { id, email, token, refresh_token, ... } }
       const userProfile = response.data;
-      const userToken = userProfile ? userProfile.token : null;
+      const userToken = userProfile ? (userProfile.token || userProfile.access_token || userProfile.access) : null;
+      const userRefreshToken = userProfile ? (userProfile.refresh_token || userProfile.refresh) : null;
 
-      if (!userToken) {
+      if (!userToken && !userRefreshToken) {
         throw new Error('Invalid response from server');
       }
 
       setUser(userProfile);
-      await updateToken(userToken);
+      await updateTokens(userToken, userRefreshToken);
       return { success: true };
     } catch (error) {
       console.log('Login failed:', error);
@@ -123,7 +146,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setIsLoading(true);
     try {
-      await updateToken(null);
+      await updateTokens(null, null);
     } catch (e) {
       console.log('Logout error:', e);
     } finally {
@@ -136,6 +159,7 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         token,
+        refreshToken,
         isLoading,
         login,
         register,
