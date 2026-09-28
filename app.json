@@ -19,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
+      "prediccdtiveBackGestureEnabled": false,
       "package": "com.anonymous.matkacardgame"
     },
     "web": {
@@ -44,6 +44,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c61551e0-a016-496f-b6ab-bda45a48acf3"
+      }
     }
   }
 }

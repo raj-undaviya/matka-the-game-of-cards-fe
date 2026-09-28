@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+// pages/WinningScreen.js
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,18 +32,19 @@ export default function WinningScreen({ route, navigation }) {
     gameType = 'pair',
     drawnCards = ['A ♠', '7 ♥'],
     drawnNumbers = [1, 7],
-    drawnCard,
     userCards = ['A', '7'],
     userPick = 'A,7',
     won = 'false',
     entryFee = 150,
-    reward = '20x',
+    reward = '30x',
     winningPrize = 3000,
     roundId,
     poolId,
-    roundNumber = 1,
+    roundNumber = 10,
     totalRounds = 10,
     slotNumber = 1,
+    accumulatedPoints = 150,
+    poolName = 'Tournament Pool',
   } = params;
 
   const isWin = won === 'true' || won === true;
@@ -51,13 +53,77 @@ export default function WinningScreen({ route, navigation }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [topWinners, setTopWinners] = useState([]);
   const [userRank, setUserRank] = useState(1);
-  const [userPoints, setUserPoints] = useState(isWin ? 3000 : 0);
+  const [userPoints, setUserPoints] = useState(Number(accumulatedPoints) || 150);
   const [balance, setBalance] = useState(0);
-  const [showWinnerModal, setShowWinnerModal] = useState(isFinalRound);
-  const [nextRoundLoading, setNextRoundLoading] = useState(false);
+  const [showWinnerModal, setShowWinnerModal] = useState(false);
+  const [nextRoundCountdown, setNextRoundCountdown] = useState(10);
+  const [finalCountdown, setFinalCountdown] = useState(60);
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const trophyAnim = useRef(new Animated.Value(0)).current;
+
+  const navigateBackToPools = useCallback(() => {
+    navigation.navigate('ContestPool', {
+      gameVariation: params.gameVariation || (gameType === 'pair' ? 'V2' : 'V1'),
+      gameId: params.gameId || 5,
+    });
+  }, [navigation, params, gameType]);
+
+  const getCardSelectionScreen = useCallback(() => {
+    if (gameType === 'single' || params.gameVariation === 'V1') return 'SingleCard';
+    if (gameType === 'pair' || params.gameVariation === 'V2') return 'PairSelection';
+    if (gameType === 'trio' || params.gameVariation === 'V3') return 'TrioGame';
+    if (gameType === 'lastDigitSum' || params.gameVariation === 'V4') return 'LastDigitSum';
+    if (gameType === 'jackpot' || params.gameVariation === 'V5') return 'LuckyDraw';
+    return 'PairSelection';
+  }, [gameType, params]);
+
+  const proceedToNextRound = useCallback(() => {
+    if (isFinalRound) return;
+    const nextRoundNumber = Number(roundNumber) + 1;
+    const targetScreen = getCardSelectionScreen();
+    navigation.replace(targetScreen, {
+      ...params,
+      poolId,
+      roundId: poolId,
+      roundNumber: nextRoundNumber,
+      totalRounds: Number(totalRounds) || 10,
+      entryFee,
+      winningPrize,
+      reward,
+      slotNumber,
+      isDailyMega: params.isDailyMega,
+      country: params.country,
+      poolName,
+      accumulatedPoints: userPoints,
+    });
+  }, [isFinalRound, roundNumber, totalRounds, getCardSelectionScreen, navigation, params, poolId, entryFee, winningPrize, reward, slotNumber, poolName, userPoints]);
+
+  // 10-Second Auto-advance for Intermediate Rounds (Rounds 1 to 9)
+  useEffect(() => {
+    if (isFinalRound) return;
+    if (nextRoundCountdown <= 0) {
+      proceedToNextRound();
+      return;
+    }
+    const t = setTimeout(() => {
+      setNextRoundCountdown((c) => c - 1);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [isFinalRound, nextRoundCountdown, proceedToNextRound]);
+
+  // 1-Minute (60s) Leaderboard Review Auto-Redirect on Final Round (Round 10)
+  useEffect(() => {
+    if (!isFinalRound) return;
+    if (finalCountdown <= 0) {
+      navigateBackToPools();
+      return;
+    }
+    const t = setTimeout(() => {
+      setFinalCountdown((c) => c - 1);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [isFinalRound, finalCountdown, navigateBackToPools]);
 
   useEffect(() => {
     Animated.spring(scaleAnim, {
@@ -88,7 +154,7 @@ export default function WinningScreen({ route, navigation }) {
         })
         .catch(err => console.log('Error leaderboard:', err));
     }
-  }, [poolId]);
+  }, [poolId, scaleAnim, trophyAnim]);
 
   const formattedDrawnCards = (() => {
     if (Array.isArray(drawnCards) && drawnCards.length > 0) {
@@ -107,61 +173,26 @@ export default function WinningScreen({ route, navigation }) {
     });
   })();
 
-  const handleNextRound = async () => {
-    setNextRoundLoading(true);
-    try {
-      const nextRNum = Number(roundNumber) + 1;
-      let nextRId = null;
-
-      if (poolId) {
-        const lb = await apiService.getPoolLeaderboard(poolId);
-        nextRId = lb.active_round_id;
-      }
-
-      if (!nextRId) {
-        const rounds = await apiService.getRounds('V2');
-        if (rounds && rounds.length > 0) {
-          nextRId = rounds[0].id;
-        }
-      }
-
-      navigation.replace('PairSelection', {
-        roundId: nextRId,
-        poolId,
-        roundNumber: nextRNum,
-        totalRounds,
-        slotNumber,
-        entryFee,
-        winningPrize,
-        reward,
-      });
-    } catch (err) {
-      navigation.replace('PairSelection', {
-        poolId,
-        roundNumber: Number(roundNumber) + 1,
-        totalRounds,
-        slotNumber,
-        entryFee,
-        winningPrize,
-        reward,
-      });
-    } finally {
-      setNextRoundLoading(false);
-    }
-  };
-
-  const displayLeaderboard = leaderboard.length > 0 ? leaderboard : [
-    { id: 1, username: 'You', rank: userRank || 1, total_points: isWin ? 3000 : 500, is_you: true },
-    { id: 2, username: 'Vikram_Ace', rank: 2, total_points: 2400 },
-    { id: 3, username: 'Pooja_Sharma', rank: 3, total_points: 1800 },
-    { id: 4, username: 'Rajesh_Matka', rank: 4, total_points: 1200 },
-    { id: 5, username: 'Anil_K', rank: 5, total_points: 900 },
-  ];
-
   const trophyScale = trophyAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.08],
   });
+
+  const displayLeaderboard = leaderboard.length > 0 ? leaderboard : [
+    { id: 'u1', username: 'You', rank: userRank || 1, total_points: userPoints, is_you: true },
+    { id: 'u2', username: 'Vikram_Ace', rank: 2, total_points: Math.max(0, userPoints - 50) },
+    { id: 'u3', username: 'Pooja_Sharma', rank: 3, total_points: Math.max(0, userPoints - 100) },
+    { id: 'u4', username: 'Rajesh_Matka', rank: 4, total_points: Math.max(0, userPoints - 150) },
+    { id: 'u5', username: 'Anil_K', rank: 5, total_points: Math.max(0, userPoints - 200) },
+  ];
+
+  // Guaranteed Pinned User Row
+  const userRankEntry = {
+    username: 'You',
+    rank: userRank || 1,
+    total_points: userPoints,
+    is_you: true,
+  };
 
   return (
     <LinearGradient colors={['#5a0000', '#120000']} style={styles.mainBackground}>
@@ -172,7 +203,7 @@ export default function WinningScreen({ route, navigation }) {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => navigation.navigate('ContestPool')}
+            onPress={navigateBackToPools}
             activeOpacity={0.8}
           >
             <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -203,6 +234,7 @@ export default function WinningScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
 
+        {/* ── Auto-Redirect Countdown Bar ── */}
         {/* ── Main Frame ── */}
         <View style={styles.cardWrapper}>
           <LinearGradient
@@ -213,64 +245,94 @@ export default function WinningScreen({ route, navigation }) {
               {/* Centered Contest Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.headerLine} />
-                <Text style={styles.cardTitle}>ROUND RESULT</Text>
+                <Text style={styles.cardTitle}>
+                  {isFinalRound ? 'FINAL LEADERBOARD' : `ROUND ${roundNumber} RESULTS`}
+                </Text>
                 <View style={styles.headerLine} />
               </View>
 
               {/* Progress Badges */}
               <View style={styles.badgesRow}>
                 <View style={styles.slotBadge}>
-                  <Text style={styles.slotBadgeText}>SLOT #{slotNumber}</Text>
+                  <Text style={styles.slotBadgeText}>{poolName.toUpperCase()}</Text>
                 </View>
                 <View style={styles.roundBadge}>
-                  <Text style={styles.roundBadgeText}>ROUND {roundNumber}/{totalRounds}</Text>
+                  <Text style={styles.roundBadgeText}>
+                    {isFinalRound ? '10 ROUNDS COMPLETED' : `ROUND ${roundNumber} OF ${totalRounds}`}
+                  </Text>
                 </View>
                 <View style={[styles.resultBadge, isWin ? styles.resultBadgeWin : styles.resultBadgeLoss]}>
-                  <Text style={styles.resultBadgeText}>{isWin ? '🏆 WON' : 'COMPLETED'}</Text>
+                  <Text style={styles.resultBadgeText}>{isWin ? '🏆 WINNER' : 'COMPLETED'}</Text>
                 </View>
               </View>
 
               {/* Outcome Banner */}
-              <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center', marginVertical: 8 }}>
-                <Animated.View style={[
-                  styles.trophyWrapper,
-                  { transform: [{ scale: trophyScale }] }
-                ]}>
+              <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center', marginVertical: 6 }}>
+                <Animated.View
+                  style={[
+                    styles.trophyWrapper,
+                    { transform: [{ scale: trophyScale }] },
+                  ]}
+                >
                   <Text style={styles.trophyEmoji}>{isWin ? '🏆' : '🎯'}</Text>
                 </Animated.View>
 
                 <Text style={styles.outcomeTitle}>
-                  {isWin ? 'CONGRATULATIONS! YOU WON!' : 'ROUND FINISHED'}
+                  {isFinalRound
+                    ? (userRank <= 3 ? '🎉 TOURNAMENT CHAMPION! 🎉' : 'TOURNAMENT COMPLETED')
+                    : (isWin ? '🎉 ROUND WINNER! 🎉' : 'ROUND COMPLETED')}
                 </Text>
                 <Text style={styles.outcomeSub}>
-                  {isWin
-                    ? `Predicted winning pair correctly! Win Reward: ${reward}`
-                    : `Round ${roundNumber} completed. Keep playing to reach Top 3!`}
+                  {isFinalRound
+                    ? (userRank <= 3
+                        ? `You finished in Rank #${userRank}! Prizes credited to your wallet.`
+                        : `You accumulated ${userPoints} PTS across 10 rounds.`)
+                    : `You earned points in Round ${roundNumber}! Next round starts shortly.`}
                 </Text>
               </Animated.View>
 
               {/* ── TWO WINNING CARDS SHOWCASE ── */}
               <View style={styles.winningCardsBox}>
-                <Text style={styles.winningCardsTitle}>⭐ TWO WINNING CARDS DRAWN ⭐</Text>
+                <Text style={styles.winningCardsTitle}>⭐ LAST ROUND WINNING CARDS ⭐</Text>
 
                 <View style={styles.cardsPairRow}>
                   {formattedDrawnCards.slice(0, 2).map((c, i) => (
                     <View key={i} style={styles.cardCol}>
                       <LinearGradient
                         colors={['#ffffff', '#f4f4f4']}
-                        style={[styles.drawnCardItem, { borderColor: i === 0 ? '#06B6D4' : '#FFD700' }]}
+                        style={[
+                          styles.drawnCardItem,
+                          { borderColor: i === 0 ? '#06B6D4' : '#FFD700' },
+                        ]}
                       >
-                        <View style={[styles.openCloseTag, { backgroundColor: i === 0 ? '#0891b2' : '#b45309' }]}>
+                        <View
+                          style={[
+                            styles.openCloseTag,
+                            { backgroundColor: i === 0 ? '#0891b2' : '#b45309' },
+                          ]}
+                        >
                           <Text style={styles.openCloseTagText}>{i === 0 ? 'OPEN' : 'CLOSE'}</Text>
                         </View>
-                        <Text style={[styles.drawnCardVal, { color: c.isRed ? '#C20005' : '#111827' }]}>
+                        <Text
+                          style={[
+                            styles.drawnCardVal,
+                            { color: c.isRed ? '#C20005' : '#111827' },
+                          ]}
+                        >
                           {c.val}
                         </Text>
-                        <Text style={[styles.drawnCardSuit, { color: c.isRed ? '#C20005' : '#111827' }]}>
+                        <Text
+                          style={[
+                            styles.drawnCardSuit,
+                            { color: c.isRed ? '#C20005' : '#111827' },
+                          ]}
+                        >
                           {c.suit}
                         </Text>
                       </LinearGradient>
-                      <Text style={styles.cardColLabel}>Card {i + 1}: {c.val} {c.suit}</Text>
+                      <Text style={styles.cardColLabel}>
+                        Card {i + 1}: {c.val} {c.suit}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -278,14 +340,26 @@ export default function WinningScreen({ route, navigation }) {
                 {/* Comparison Strip */}
                 <View style={styles.compareStrip}>
                   <View>
-                    <Text style={styles.compareLabel}>YOUR PICK</Text>
+                    <Text style={styles.compareLabel}>YOUR CARD PICK</Text>
                     <Text style={styles.compareValue}>
-                      {Array.isArray(userCards) ? userCards.join(' & ') : String(userPick).replace(',', ' & ')}
+                      {Array.isArray(userCards)
+                        ? userCards.join(' & ')
+                        : String(userPick).replace(',', ' & ')}
                     </Text>
                   </View>
-                  <View style={[styles.matchBadge, isWin ? styles.matchBadgeWin : styles.matchBadgeLoss]}>
-                    <Text style={[styles.matchBadgeText, { color: isWin ? '#00E676' : '#FF6B6B' }]}>
-                      {isWin ? '✓ MATCHED' : '✗ MISSED'}
+                  <View
+                    style={[
+                      styles.matchBadge,
+                      isWin ? styles.matchBadgeWin : styles.matchBadgeLoss,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.matchBadgeText,
+                        { color: isWin ? '#00E676' : '#FF6B6B' },
+                      ]}
+                    >
+                      {isWin ? '✓ MATCHED' : 'COMPLETED'}
                     </Text>
                   </View>
                 </View>
@@ -294,46 +368,62 @@ export default function WinningScreen({ route, navigation }) {
               {/* ── Points / Prize Strip ── */}
               <View style={styles.prizeStrip}>
                 <View style={styles.prizeStripItem}>
-                  <Text style={styles.prizeStripLabel}>ROUND POINTS</Text>
-                  <Text style={[styles.prizeStripValue, { color: isWin ? '#00E676' : '#FFD700' }]}>
-                    {isWin ? '+3,000 PTS' : '0 PTS'}
+                  <Text style={styles.prizeStripLabel}>FINAL RANK</Text>
+                  <Text style={[styles.prizeStripValue, { color: '#FFD700' }]}>
+                    #{userRank || 1}
                   </Text>
                 </View>
                 <View style={styles.prizeStripDivider} />
                 <View style={styles.prizeStripItem}>
-                  <Text style={styles.prizeStripLabel}>YOUR RANK</Text>
-                  <Text style={[styles.prizeStripValue, { color: '#FFD700' }]}>#{userRank || 1}</Text>
+                  <Text style={styles.prizeStripLabel}>TOTAL POINTS</Text>
+                  <Text style={[styles.prizeStripValue, { color: '#00E676' }]}>
+                    {userPoints} PTS
+                  </Text>
                 </View>
                 <View style={styles.prizeStripDivider} />
                 <View style={styles.prizeStripItem}>
-                  <Text style={styles.prizeStripLabel}>TOTAL POINTS</Text>
-                  <Text style={styles.prizeStripValue}>{userPoints} PTS</Text>
+                  <Text style={styles.prizeStripLabel}>PRIZE STATUS</Text>
+                  <Text
+                    style={[
+                      styles.prizeStripValue,
+                      { color: userRank <= 3 ? '#00E676' : '#94A3B8' },
+                    ]}
+                  >
+                    {userRank <= 3 ? '🏆 WINNER' : 'FINISHED'}
+                  </Text>
                 </View>
               </View>
 
-              {/* ── Leaderboard Preview ── */}
+              {/* ── Leaderboard Section ── */}
               <View style={styles.leaderboardBox}>
                 <View style={styles.leaderboardHeaderRow}>
                   <Text style={styles.leaderboardTitle}>🏆 LEADERBOARD STANDINGS</Text>
-                  <Text style={styles.leaderboardSub}>Top 3 Win Prizes</Text>
+                  <Text style={styles.leaderboardSub}>Top 3 Win Prize Multipliers</Text>
                 </View>
 
-                {displayLeaderboard.slice(0, 3).map((item, index) => {
+                {/* Leaderboard Participants */}
+                {displayLeaderboard.map((item, index) => {
                   const medals = ['🥇', '🥈', '🥉'];
+                  const isYou = item.username === 'You' || item.is_you;
                   return (
                     <View
                       key={item.id || index}
                       style={[
                         styles.leaderboardRow,
-                        (item.username === 'You' || item.is_you) && styles.leaderboardRowYou
+                        isYou && styles.leaderboardRowYou,
                       ]}
                     >
                       <View style={styles.playerInfoLeft}>
-                        <Text style={{ fontSize: 18 }}>{medals[index] || `#${index + 1}`}</Text>
-                        <Text style={{ fontSize: 18 }}>{getAvatar(item.id, item.username)}</Text>
+                        <Text style={{ fontSize: 16 }}>{medals[index] || `#${index + 1}`}</Text>
+                        <Text style={{ fontSize: 16 }}>{getAvatar(item.id, item.username)}</Text>
                         <View>
-                          <Text style={[styles.playerName, (item.username === 'You' || item.is_you) && { color: '#FFD700' }]}>
-                            {item.username} {item.username === 'You' || item.is_you ? '(You)' : ''}
+                          <Text
+                            style={[
+                              styles.playerName,
+                              isYou && { color: '#FFD700', fontWeight: '900' },
+                            ]}
+                          >
+                            {item.username} {isYou ? '(You)' : ''}
                           </Text>
                           <Text style={styles.playerRankSub}>Rank #{item.rank || index + 1}</Text>
                         </View>
@@ -345,12 +435,24 @@ export default function WinningScreen({ route, navigation }) {
               </View>
 
               {/* ── Actions ── */}
-              <View style={{ marginTop: 16, marginBottom: 20 }}>
+              <View style={{ marginTop: 14, marginBottom: 20 }}>
                 {!isFinalRound ? (
+                  <View style={styles.autoNextContainer}>
+                    <LinearGradient
+                      colors={['rgba(212, 175, 55, 0.25)', 'rgba(212, 175, 55, 0.08)']}
+                      style={styles.autoNextBadge}
+                    >
+                      <MaterialCommunityIcons name="timer-sand" size={20} color="#FFD700" />
+                      <Text style={styles.autoNextText}>
+                        ROUND {Number(roundNumber) + 1} OF {totalRounds} STARTS IN{' '}
+                        <Text style={styles.autoNextTimer}>{nextRoundCountdown}s</Text>
+                      </Text>
+                    </LinearGradient>
+                  </View>
+                ) : (
                   <TouchableOpacity
                     style={styles.actionBtn}
-                    onPress={handleNextRound}
-                    disabled={nextRoundLoading}
+                    onPress={navigateBackToPools}
                     activeOpacity={0.85}
                   >
                     <LinearGradient
@@ -360,24 +462,7 @@ export default function WinningScreen({ route, navigation }) {
                       style={styles.actionGradient}
                     >
                       <Text style={styles.actionBtnText}>
-                        {nextRoundLoading
-                          ? 'LOADING NEXT ROUND…'
-                          : `PLAY ROUND ${Number(roundNumber) + 1} OF ${totalRounds} ➔`}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => setShowWinnerModal(true)}
-                    activeOpacity={0.85}
-                  >
-                    <LinearGradient
-                      colors={['#FFD700', '#FFA000', '#D4AF37']}
-                      style={styles.actionGradient}
-                    >
-                      <Text style={[styles.actionBtnText, { color: '#000' }]}>
-                        👑 VIEW FINAL TOURNAMENT WINNERS 👑
+                        🎮 BACK TO CONTEST POOLS · ({finalCountdown}s)
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -388,7 +473,7 @@ export default function WinningScreen({ route, navigation }) {
                   onPress={() => navigation.navigate('Wallet')}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.secondaryWalletText}>💰 View Wallet Balance</Text>
+                  <Text style={styles.secondaryWalletText}>💰 View Wallet & Claimed Prizes</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -423,13 +508,15 @@ export default function WinningScreen({ route, navigation }) {
                 >
                   <View style={styles.podiumLeft}>
                     <Text style={{ fontSize: 24 }}>🥇</Text>
-                    <Text style={{ fontSize: 20 }}>{getAvatar(1, topWinners[0]?.username || 'Player 1')}</Text>
+                    <Text style={{ fontSize: 20 }}>
+                      {getAvatar(1, topWinners[0]?.username || 'Player 1')}
+                    </Text>
                     <View>
                       <Text style={[styles.podiumName, { color: '#FFD700' }]}>
                         {topWinners[0]?.username || 'Rank 1 Champion'}
                       </Text>
                       <Text style={styles.podiumScore}>
-                        {topWinners[0]?.total_points || 3000} PTS
+                        {topWinners[0]?.total_points || 300} PTS
                       </Text>
                     </View>
                   </View>
@@ -448,13 +535,15 @@ export default function WinningScreen({ route, navigation }) {
                 >
                   <View style={styles.podiumLeft}>
                     <Text style={{ fontSize: 22 }}>🥈</Text>
-                    <Text style={{ fontSize: 18 }}>{getAvatar(2, topWinners[1]?.username || 'Player 2')}</Text>
+                    <Text style={{ fontSize: 18 }}>
+                      {getAvatar(2, topWinners[1]?.username || 'Player 2')}
+                    </Text>
                     <View>
                       <Text style={styles.podiumName}>
                         {topWinners[1]?.username || 'Rank 2 Player'}
                       </Text>
                       <Text style={styles.podiumScore}>
-                        {topWinners[1]?.total_points || 2400} PTS
+                        {topWinners[1]?.total_points || 200} PTS
                       </Text>
                     </View>
                   </View>
@@ -473,13 +562,15 @@ export default function WinningScreen({ route, navigation }) {
                 >
                   <View style={styles.podiumLeft}>
                     <Text style={{ fontSize: 22 }}>🥉</Text>
-                    <Text style={{ fontSize: 18 }}>{getAvatar(3, topWinners[2]?.username || 'Player 3')}</Text>
+                    <Text style={{ fontSize: 18 }}>
+                      {getAvatar(3, topWinners[2]?.username || 'Player 3')}
+                    </Text>
                     <View>
                       <Text style={styles.podiumName}>
                         {topWinners[2]?.username || 'Rank 3 Player'}
                       </Text>
                       <Text style={styles.podiumScore}>
-                        {topWinners[2]?.total_points || 1800} PTS
+                        {topWinners[2]?.total_points || 100} PTS
                       </Text>
                     </View>
                   </View>
@@ -492,7 +583,7 @@ export default function WinningScreen({ route, navigation }) {
                 </LinearGradient>
               </View>
 
-              {/* Wallet Direct Action */}
+              {/* Action Buttons */}
               <TouchableOpacity
                 style={styles.modalWalletBtn}
                 onPress={() => {
@@ -515,7 +606,7 @@ export default function WinningScreen({ route, navigation }) {
                 style={{ marginTop: 12, paddingVertical: 6 }}
                 onPress={() => {
                   setShowWinnerModal(false);
-                  navigation.navigate('ContestPool');
+                  navigateBackToPools();
                 }}
               >
                 <Text style={{ color: '#D4AF37', fontSize: 13, fontWeight: '700' }}>
@@ -589,10 +680,31 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 14,
   },
+  redirectBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    marginHorizontal: 16,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.25)',
+  },
+  redirectBarText: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  redirectSeconds: {
+    color: '#FFD700',
+    fontWeight: '900',
+  },
   cardWrapper: {
     flex: 1,
     marginHorizontal: 14,
-    marginTop: 8,
+    marginTop: 6,
     marginBottom: 16,
     borderRadius: 16,
     overflow: 'hidden',
@@ -630,7 +742,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   slotBadge: {
     backgroundColor: '#262626',
@@ -642,7 +754,7 @@ const styles = StyleSheet.create({
   },
   slotBadgeText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
   },
   roundBadge: {
@@ -655,7 +767,7 @@ const styles = StyleSheet.create({
   },
   roundBadgeText: {
     color: '#FFD700',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
   },
   resultBadge: {
@@ -671,30 +783,30 @@ const styles = StyleSheet.create({
   },
   resultBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
   },
   trophyWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 74,
+    height: 74,
+    borderRadius: 37,
     backgroundColor: 'rgba(255, 215, 0, 0.15)',
     borderWidth: 2,
     borderColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
     shadowColor: '#FFD700',
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 6,
   },
   trophyEmoji: {
-    fontSize: 40,
+    fontSize: 36,
   },
   outcomeTitle: {
     color: '#FFD700',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -702,7 +814,7 @@ const styles = StyleSheet.create({
   },
   outcomeSub: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
     marginTop: 2,
     paddingHorizontal: 16,
@@ -710,31 +822,31 @@ const styles = StyleSheet.create({
   winningCardsBox: {
     backgroundColor: 'rgba(15, 15, 15, 0.9)',
     borderRadius: 14,
-    padding: 12,
+    padding: 10,
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.4)',
-    marginVertical: 10,
+    marginVertical: 8,
     alignItems: 'center',
   },
   winningCardsTitle: {
     color: '#FFD700',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   cardsPairRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 14,
     justifyContent: 'center',
   },
   cardCol: {
     alignItems: 'center',
   },
   drawnCardItem: {
-    width: 82,
-    height: 122,
+    width: 76,
+    height: 114,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -753,24 +865,24 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   openCloseTagText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '900',
     color: '#fff',
   },
   drawnCardVal: {
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: '900',
-    marginTop: 8,
+    marginTop: 6,
   },
   drawnCardSuit: {
-    fontSize: 24,
+    fontSize: 22,
     marginTop: -3,
   },
   cardColLabel: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    marginTop: 4,
+    marginTop: 3,
   },
   compareStrip: {
     flexDirection: 'row',
@@ -779,9 +891,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     width: '100%',
-    marginTop: 10,
+    marginTop: 8,
   },
   compareLabel: {
     color: '#888',
@@ -790,7 +902,7 @@ const styles = StyleSheet.create({
   },
   compareValue: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
   },
   matchBadge: {
@@ -804,11 +916,11 @@ const styles = StyleSheet.create({
     borderColor: '#00C853',
   },
   matchBadgeLoss: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    borderColor: '#ef4444',
+    backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    borderColor: '#64748B',
   },
   matchBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
   },
   prizeStrip: {
@@ -817,11 +929,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(15, 15, 15, 0.85)',
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#333333',
-    marginVertical: 6,
+    marginVertical: 4,
   },
   prizeStripItem: {
     alignItems: 'center',
@@ -834,49 +946,89 @@ const styles = StyleSheet.create({
   },
   prizeStripValue: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    marginTop: 2,
+    marginTop: 1,
   },
   prizeStripDivider: {
     width: 1,
-    height: 24,
+    height: 22,
     backgroundColor: '#333333',
   },
   leaderboardBox: {
     backgroundColor: 'rgba(15, 15, 15, 0.9)',
     borderRadius: 12,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.3)',
-    marginVertical: 6,
+    marginVertical: 4,
   },
   leaderboardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   leaderboardTitle: {
     color: '#FFD700',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   leaderboardSub: {
     color: '#888',
-    fontSize: 10,
+    fontSize: 9,
+  },
+  pinnedUserRow: {
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+    padding: 8,
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'relative',
+  },
+  pinnedTag: {
+    position: 'absolute',
+    top: -6,
+    right: 10,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  pinnedTagText: {
+    color: '#000',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  pinnedUserName: {
+    color: '#FFD700',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  pinnedUserSub: {
+    color: '#E2E8F0',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  pinnedUserPoints: {
+    color: '#00E676',
+    fontSize: 14,
+    fontWeight: '900',
   },
   leaderboardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
   },
   leaderboardRowYou: {
-    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
   },
   playerInfoLeft: {
     flexDirection: 'row',
@@ -885,16 +1037,42 @@ const styles = StyleSheet.create({
   },
   playerName: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   playerRankSub: {
     color: '#888',
-    fontSize: 10,
+    fontSize: 9,
   },
   playerPoints: {
     color: '#FFD700',
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  autoNextContainer: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 215, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  autoNextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  autoNextText: {
+    color: '#FFD700',
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  autoNextTimer: {
+    color: '#00E676',
+    fontSize: 14,
     fontWeight: '900',
   },
   actionBtn: {
@@ -907,19 +1085,19 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   actionGradient: {
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBtnText: {
     color: '#FFFFFF',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0.5,
   },
   secondaryWalletBtn: {
-    marginTop: 10,
-    paddingVertical: 10,
+    marginTop: 8,
+    paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.4)',
@@ -929,7 +1107,7 @@ const styles = StyleSheet.create({
   secondaryWalletText: {
     color: '#D4AF37',
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 12,
   },
   modalBackdrop: {
     flex: 1,
@@ -961,26 +1139,26 @@ const styles = StyleSheet.create({
   },
   modalSubTitle: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     marginTop: 2,
   },
   modalNote: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 11,
+    fontSize: 10,
     textAlign: 'center',
     marginTop: 4,
   },
   podiumContainer: {
     width: '100%',
-    marginTop: 16,
+    marginTop: 14,
     gap: 8,
   },
   podiumRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 10,
+    padding: 9,
     borderRadius: 10,
     borderWidth: 1.5,
   },
@@ -992,7 +1170,7 @@ const styles = StyleSheet.create({
   podiumName: {
     color: '#fff',
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 12,
   },
   podiumScore: {
     color: 'rgba(255,255,255,0.6)',
@@ -1001,7 +1179,7 @@ const styles = StyleSheet.create({
   podiumPrize: {
     color: '#00E676',
     fontWeight: '900',
-    fontSize: 15,
+    fontSize: 14,
   },
   podiumPct: {
     fontSize: 9,
@@ -1009,17 +1187,17 @@ const styles = StyleSheet.create({
   },
   modalWalletBtn: {
     width: '100%',
-    marginTop: 18,
+    marginTop: 16,
     borderRadius: 12,
     overflow: 'hidden',
   },
   modalWalletGradient: {
-    paddingVertical: 13,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   modalWalletBtnText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     letterSpacing: 0.5,
   },

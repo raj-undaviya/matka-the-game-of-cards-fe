@@ -89,14 +89,30 @@ const getAvatarData = (id) => {
 };
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function WalletScreen({ navigation }) {
+export default function WalletScreen({ route, navigation }) {
   const { user } = useAuth();
+  const {
+    returnScreen,
+    returnParams,
+    autoOpenDeposit = false,
+    requiredAmount = 0,
+  } = route?.params || {};
 
   const [balance, setBalance] = useState(0);
   const [actionType, setActionType] = useState(null);
   const [inputAmount, setInputAmount] = useState('');
   const [transactions, setTransactions] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
+
+  // Auto-open deposit modal if requested from ContestPoolScreen
+  useEffect(() => {
+    if (autoOpenDeposit) {
+      setActionType('deposit');
+      if (requiredAmount && requiredAmount > 0) {
+        setInputAmount(String(Math.ceil(requiredAmount)));
+      }
+    }
+  }, [autoOpenDeposit, requiredAmount]);
 
   // Withdrawal Form State
   const [withdrawMode, setWithdrawMode] = useState('upi');
@@ -298,19 +314,46 @@ export default function WalletScreen({ navigation }) {
         order_id: orderId,
       });
 
-      Alert.alert(
-        'Success',
-        res.message || 'Deposit successful and balance updated!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              fetchWalletDetails();
-              hideAction();
+      await fetchWalletDetails();
+
+      // If redirected from ContestPoolScreen flow:
+      if (returnScreen && returnParams) {
+        if (returnParams.poolId || returnParams.roundId) {
+          try {
+            await apiService.joinPool(returnParams.poolId || returnParams.roundId);
+          } catch (e) {
+            console.log('Auto join pool after deposit:', e);
+          }
+        }
+
+        Alert.alert(
+          'Deposit Successful! 💰',
+          res.message || `₹${inputAmount || requiredAmount} added to your wallet.\nPool joined successfully! Proceeding to card selection...`,
+          [
+            {
+              text: 'SELECT CARD NOW ➔',
+              onPress: () => {
+                hideAction();
+                navigation.replace(returnScreen, returnParams);
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Success',
+          res.message || 'Deposit successful and balance updated!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                fetchWalletDetails();
+                hideAction();
+              },
+            },
+          ]
+        );
+      }
     } catch (err) {
       Alert.alert(
         'Payment Incomplete',

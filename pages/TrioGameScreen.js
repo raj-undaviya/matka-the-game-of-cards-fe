@@ -14,23 +14,68 @@ const cards = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const suits = ['♠', '♥', '♦', '♣'];
 
 export default function TrioGameScreen({ route, navigation }) {
-  const { roundId, entryFee = 200, winningPrize = 10000, reward = '50x' } = route.params || {};
+  const {
+    roundId: initialRoundId,
+    poolId,
+    entryFee = 200,
+    winningPrize = 10000,
+    reward = '50x',
+    roundNumber = 1,
+    totalRounds = 10,
+    slotNumber = 1,
+    isDailyMega = false,
+    country = 'India',
+  } = route.params || {};
 
+  const [currentRound, setCurrentRound] = useState(Number(roundNumber) || 1);
+  const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
   const [selectedCards, setSelectedCards] = useState([]);
-  const [timer, setTimer] = useState(60);
+  const [timer, setTimer] = useState(10);
   const [balance, setBalance] = useState(0);
 
   useEffect(() => {
     // Fetch wallet balance
     apiService.getWalletBalance()
-      .then(res => setBalance(res.balance))
+      .then(res => setBalance(res.balance || res.current_balance || 0))
       .catch(err => console.log('Error fetching balance:', err));
 
+    if (poolId) {
+      apiService.getPoolLeaderboard(poolId)
+        .then(res => {
+          if (res && res.active_round_id) {
+            setActiveRoundId(res.active_round_id);
+          }
+        })
+        .catch(err => console.log('Error fetching pool round:', err));
+    }
+  }, [poolId, initialRoundId, currentRound]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      setTimer((prev) => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (timer === 0) {
+      if (selectedCards.length === 3) {
+        handlePlaceBet();
+      } else {
+        if (currentRound < Number(totalRounds)) {
+          const nextR = currentRound + 1;
+          setCurrentRound(nextR);
+          setSelectedCards([]);
+          setTimer(10);
+        } else {
+          Alert.alert('Completed', 'All rounds completed!');
+        }
+      }
+    }
+  }, [timer]);
 
   const handleCardSelect = (card) => {
     if (selectedCards.includes(card)) {
@@ -43,39 +88,58 @@ export default function TrioGameScreen({ route, navigation }) {
   };
 
   const isTriple = selectedCards.length === 3 && new Set(selectedCards).size === 1;
-  const multiplier = isTriple ? '50x' : '25x';
+  const multiplier = isTriple ? '50x' : (reward || '25x');
 
-  const handlePlaceBet = () => {
+  const [loading, setLoading] = useState(false);
+
+  const handlePlaceBet = async () => {
+    if (loading) return;
     if (selectedCards.length !== 3) {
       Alert.alert('Invalid Selection', 'Please select exactly 3 cards');
       return;
     }
-    Alert.alert(
-      'Confirm Bet',
-      `Bet on ${selectedCards.join(', ')}?\nEntry Fee: ₹${entryFee}\nReward: ${multiplier}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              const numList = selectedCards.map(c => c === 'A' ? 1 : Number(c));
-              await apiService.placeBet(roundId, numList, entryFee);
-              
-              navigation.replace('LiveGame', {
-                gameType: 'trio',
-                roundId,
-                selectedCards: selectedCards.join(','),
-                entryFee,
-                reward: multiplier,
-              });
-            } catch (err) {
-              Alert.alert('Bet Error', err.message || 'Failed to place bet');
-            }
-          },
-        },
-      ]
-    );
+    setLoading(true);
+    try {
+      const targetId = activeRoundId || initialRoundId || poolId;
+      const numList = selectedCards.map(c => c === 'A' ? 1 : Number(c));
+      const res = await apiService.placeBet(targetId, numList, entryFee);
+      const finalRoundId = res?.round || res?.round_id || targetId;
+      
+      navigation.replace('LiveGame', {
+        gameType: 'trio',
+        roundId: finalRoundId,
+        poolId,
+        selectedCards: selectedCards.join(','),
+        entryFee,
+        reward: multiplier,
+        winningPrize,
+        roundNumber: currentRound,
+        totalRounds,
+        slotNumber,
+        isDailyMega,
+        country,
+      });
+    } catch (err) {
+      const errMsg = err.message || 'Failed to place bet';
+      if (errMsg.includes('already placed')) {
+        navigation.replace('LiveGame', {
+          gameType: 'trio',
+          roundId: activeRoundId || initialRoundId || poolId,
+          poolId,
+          selectedCards: selectedCards.join(','),
+          entryFee,
+          reward: multiplier,
+          winningPrize,
+          roundNumber: currentRound,
+          totalRounds,
+          slotNumber,
+          isDailyMega,
+          country,
+        });
+      } else {
+        Alert.alert('Bet Error', errMsg);
+      }
+    }
   };
 
   return (
@@ -94,8 +158,10 @@ export default function TrioGameScreen({ route, navigation }) {
         <View style={styles.infoBar}>
           {[
             { label: 'Timer', value: `${timer}s`, color: timer < 10 ? '#FF6B6B' : '#fff' },
-            { label: 'Triple Match', value: 'x50', color: '#FFD700' },
-            { label: 'Other', value: 'x25', color: '#8B5CF6' },
+            poolId
+              ? { label: 'Round', value: `${roundNumber}/${totalRounds}`, color: '#00E676' }
+              : { label: 'Triple Match', value: 'x50', color: '#FFD700' },
+            { label: 'Reward', value: multiplier, color: '#8B5CF6' },
           ].map((item, i) => (
             <View key={i} style={styles.infoItem}>
               <Text style={styles.infoLabel}>{item.label}</Text>

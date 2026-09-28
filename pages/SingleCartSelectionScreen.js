@@ -67,68 +67,134 @@ function PlayingCardBack({ width, height, style }) {
 }
 
 export default function SingleCardGameScreen({ route, navigation }) {
-    const { roundId, entryFee = 100, winningPrize = 1000, reward = '10x' } = route.params || {};
+    const {
+        roundId: initialRoundId,
+        poolId,
+        entryFee = 100,
+        winningPrize = 1000,
+        reward = '10x',
+        roundNumber = 1,
+        totalRounds = 10,
+        slotNumber = 1,
+        isDailyMega = false,
+        country = 'India',
+    } = route.params || {};
 
+    const [currentRound, setCurrentRound] = useState(Number(roundNumber) || 1);
+    const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
     const [selectedCard, setSelectedCard] = useState(null);
-    const [timer, setTimer] = useState(60);
+    const [timer, setTimer] = useState(10);
     const [balance, setBalance] = useState(0);
     const [slotsOccupied, setSlotsOccupied] = useState(0);
 
     useEffect(() => {
         // Fetch wallet balance
         apiService.getWalletBalance()
-            .then(res => setBalance(res.balance))
+            .then(res => setBalance(res.balance || res.current_balance || 0))
             .catch(err => console.log('Error fetching balance:', err));
 
-        // Fetch live slot occupancy
-        if (roundId) {
-            apiService.getRoundDetail(roundId)
-                .then(res => setSlotsOccupied(res.slots_filled))
-                .catch(err => console.log('Error fetching round info:', err));
+        // Resolve active round from pool leaderboard if in a pool
+        if (poolId) {
+            apiService.getPoolLeaderboard(poolId)
+                .then(res => {
+                    if (res && res.active_round_id) {
+                        setActiveRoundId(res.active_round_id);
+                    }
+                })
+                .catch(err => console.log('Error fetching pool round:', err));
         }
 
+        // Fetch live slot occupancy
+        const rId = activeRoundId || initialRoundId;
+        if (rId) {
+            apiService.getRoundDetail(rId)
+                .then(res => setSlotsOccupied(res.slots_filled || 0))
+                .catch(err => console.log('Error fetching round info:', err));
+        }
+    }, [poolId, initialRoundId, activeRoundId, currentRound]);
+
+    useEffect(() => {
         const interval = setInterval(() => {
-            setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+            setTimer((prev) => {
+                if (prev <= 1) return 0;
+                return prev - 1;
+            });
         }, 1000);
         return () => clearInterval(interval);
-    }, [roundId]);
+    }, []);
+
+    useEffect(() => {
+        if (timer === 0) {
+            if (selectedCard) {
+                handlePlaceBet();
+            } else {
+                if (currentRound < Number(totalRounds)) {
+                    const nextR = currentRound + 1;
+                    setCurrentRound(nextR);
+                    setSelectedCard(null);
+                    setTimer(10);
+                } else {
+                    Alert.alert('Completed', 'All rounds completed!');
+                }
+            }
+        }
+    }, [timer]);
 
     const mapCardToNumber = (cardStr) => {
         if (cardStr === 'A') return 1;
         return Number(cardStr);
     };
 
-    const handlePlaceBet = () => {
+    const [loading, setLoading] = useState(false);
+
+    const handlePlaceBet = async () => {
+        if (loading) return;
         if (!selectedCard) {
             Alert.alert('No Card Selected', 'Please select a card before placing bet');
             return;
         }
-        Alert.alert(
-            'Confirm Bet',
-            `Place bet on ${selectedCard}?\nEntry Fee: ₹${entryFee}`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Confirm',
-                    onPress: async () => {
-                        try {
-                            const numVal = mapCardToNumber(selectedCard);
-                            await apiService.placeBet(roundId, [numVal], entryFee);
+        setLoading(true);
+        try {
+            const targetId = activeRoundId || initialRoundId || poolId;
+            const numVal = mapCardToNumber(selectedCard);
+            const res = await apiService.placeBet(targetId, [numVal], entryFee);
+            const finalRoundId = res?.round || res?.round_id || targetId;
 
-                            navigation.replace('LiveGame', {
-                                gameType: 'single',
-                                roundId,
-                                selectedCard,
-                                entryFee,
-                                reward,
-                            });
-                        } catch (err) {
-                            Alert.alert('Bet Error', err.message || 'Failed to place bet');
-                        }
-                    },
-                },
-            ]
-        );
+            navigation.replace('LiveGame', {
+                gameType: 'single',
+                roundId: finalRoundId,
+                poolId,
+                selectedCard,
+                entryFee,
+                reward,
+                winningPrize,
+                roundNumber: currentRound,
+                totalRounds,
+                slotNumber,
+                isDailyMega,
+                country,
+            });
+        } catch (err) {
+            const errMsg = err.message || 'Failed to place bet';
+            if (errMsg.includes('already placed')) {
+                navigation.replace('LiveGame', {
+                    gameType: 'single',
+                    roundId: activeRoundId || initialRoundId || poolId,
+                    poolId,
+                    selectedCard,
+                    entryFee,
+                    reward,
+                    winningPrize,
+                    roundNumber: currentRound,
+                    totalRounds,
+                    slotNumber,
+                    isDailyMega,
+                    country,
+                });
+            } else {
+                Alert.alert('Bet Error', errMsg);
+            }
+        }
     };
 
     const getSelectedCardText = () => {
@@ -155,8 +221,10 @@ export default function SingleCardGameScreen({ route, navigation }) {
             <View style={localStyles.infoBar}>
                 {[
                     { label: 'Timer', value: `${timer}s`, color: timer < 10 ? '#FF6B6B' : '#2C1E15' },
-                    { label: 'Slots', value: `${slotsOccupied}/5` },
-                    { label: 'Reward', value: 'x10', color: '#C59B27' },
+                    poolId
+                      ? { label: 'Round', value: `${roundNumber}/${totalRounds}`, color: '#00C853' }
+                      : { label: 'Slots', value: `${slotsOccupied}/5` },
+                    { label: 'Reward', value: reward || 'x10', color: '#C59B27' },
                 ].map((item, i) => (
                     <View key={i} style={localStyles.infoItem}>
                         <Text style={localStyles.infoLabel}>{item.label}</Text>

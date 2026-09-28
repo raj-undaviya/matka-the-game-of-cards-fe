@@ -11,56 +11,120 @@ const { width } = Dimensions.get('window');
 const BTN_SIZE = (width - 80) / 5;
 
 export default function LastDigitSumGameScreen({ route, navigation }) {
-  const { roundId, entryFee = 1000, winningPrize = 80000, reward = '80x' } = route.params || {};
+  const {
+    roundId: initialRoundId,
+    poolId,
+    entryFee = 1000,
+    winningPrize = 80000,
+    reward = '80x',
+    roundNumber = 1,
+    totalRounds = 10,
+    slotNumber = 1,
+    isDailyMega = false,
+    country = 'India',
+  } = route.params || {};
 
+  const [currentRound, setCurrentRound] = useState(Number(roundNumber) || 1);
+  const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
   const [selectedDigit, setSelectedDigit] = useState(null);
-  const [timer, setTimer] = useState(60);
+  const [timer, setTimer] = useState(10);
   const [balance, setBalance] = useState(0);
 
   useEffect(() => {
     // Fetch wallet balance
     apiService.getWalletBalance()
-      .then(res => setBalance(res.balance))
+      .then(res => setBalance(res.balance || res.current_balance || 0))
       .catch(err => console.log('Error fetching balance:', err));
 
+    if (poolId) {
+      apiService.getPoolLeaderboard(poolId)
+        .then(res => {
+          if (res && res.active_round_id) {
+            setActiveRoundId(res.active_round_id);
+          }
+        })
+        .catch(err => console.log('Error fetching pool round:', err));
+    }
+  }, [poolId, initialRoundId, currentRound]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      setTimer((prev) => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const handlePlaceBet = () => {
+  useEffect(() => {
+    if (timer === 0) {
+      if (selectedDigit !== null) {
+        handlePlaceBet();
+      } else {
+        if (currentRound < Number(totalRounds)) {
+          const nextR = currentRound + 1;
+          setCurrentRound(nextR);
+          setSelectedDigit(null);
+          setTimer(10);
+        } else {
+          Alert.alert('Completed', 'All rounds completed!');
+        }
+      }
+    }
+  }, [timer]);
+
+  const [loading, setLoading] = useState(false);
+
+  const handlePlaceBet = async () => {
+    if (loading) return;
     if (selectedDigit === null) {
       Alert.alert('No Digit Selected', 'Please select a digit 0–9');
       return;
     }
-    Alert.alert(
-      'Confirm Bet',
-      `Bet on digit: ${selectedDigit}?\nEntry Fee: ₹${entryFee.toLocaleString()}\nWin: ₹${winningPrize.toLocaleString()} (${reward})`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              // Map 0 to 10 to satisfy backend validator range
-              const apiDigit = selectedDigit === 0 ? 10 : selectedDigit;
-              await apiService.placeBet(roundId, [apiDigit], entryFee);
-              
-              navigation.replace('LiveGame', {
-                gameType: 'lastDigitSum',
-                roundId,
-                selectedDigit,
-                entryFee,
-                reward,
-              });
-            } catch (err) {
-              Alert.alert('Bet Error', err.message || 'Failed to place bet');
-            }
-          },
-        },
-      ]
-    );
+    setLoading(true);
+    try {
+      const targetId = activeRoundId || initialRoundId || poolId;
+      // Map 0 to 10 to satisfy backend validator range
+      const apiDigit = selectedDigit === 0 ? 10 : selectedDigit;
+      const res = await apiService.placeBet(targetId, [apiDigit], entryFee);
+      const finalRoundId = res?.round || res?.round_id || targetId;
+      
+      navigation.replace('LiveGame', {
+        gameType: 'lastDigitSum',
+        roundId: finalRoundId,
+        poolId,
+        selectedDigit,
+        entryFee,
+        reward,
+        winningPrize,
+        roundNumber: currentRound,
+        totalRounds,
+        slotNumber,
+        isDailyMega,
+        country,
+      });
+    } catch (err) {
+      const errMsg = err.message || 'Failed to place bet';
+      if (errMsg.includes('already placed')) {
+        navigation.replace('LiveGame', {
+          gameType: 'lastDigitSum',
+          roundId: activeRoundId || initialRoundId || poolId,
+          poolId,
+          selectedDigit,
+          entryFee,
+          reward,
+          winningPrize,
+          roundNumber: currentRound,
+          totalRounds,
+          slotNumber,
+          isDailyMega,
+          country,
+        });
+      } else {
+        Alert.alert('Bet Error', errMsg);
+      }
+    }
   };
 
   return (
@@ -79,7 +143,9 @@ export default function LastDigitSumGameScreen({ route, navigation }) {
         <View style={styles.infoBar}>
           {[
             { label: 'Timer', value: `${timer}s`, color: timer < 10 ? '#FF6B6B' : '#fff' },
-            { label: 'Slots', value: '3/5' },
+            poolId
+              ? { label: 'Round', value: `${roundNumber}/${totalRounds}`, color: '#00E676' }
+              : { label: 'Slots', value: '3/5' },
             { label: 'Reward', value: 'x80', color: '#F97316' },
           ].map((item, i) => (
             <View key={i} style={styles.infoItem}>

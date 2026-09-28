@@ -24,14 +24,14 @@ export default function RegisterScreen({ navigation }) {
   const { register, isLoading } = useContext(AuthContext);
 
   const handleOpenTerms = () => {
-    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://127.0.0.1:8000';
+    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://192.168.1.8:8000';
     Linking.openURL(`${baseUrl}/terms.html`).catch(err => {
       Alert.alert('Error', 'Could not load link');
     });
   };
 
   const handleOpenPrivacy = () => {
-    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://127.0.0.1:8000';
+    const baseUrl = API_BASE_URL ? API_BASE_URL.replace('/api', '') : 'http://192.168.1.8:8000';
     Linking.openURL(`${baseUrl}/privacy.html`).catch(err => {
       Alert.alert('Error', 'Could not load link');
     });
@@ -105,138 +105,138 @@ export default function RegisterScreen({ navigation }) {
             <View style={styles.outerBoardFrame}>
               <View style={styles.innerCard}>
 
-                    <Text style={styles.cardHeaderTitle}>REGISTER NEW PLAYER</Text>
+                <Text style={styles.cardHeaderTitle}>REGISTER NEW PLAYER</Text>
 
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.label}>Username</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={username}
-                        onChangeText={setUsername}
-                        placeholder="Enter username"
-                        placeholderTextColor="rgba(255,255,255,0.4)"
-                        autoCapitalize="none"
-                      />
-                    </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Username</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="Enter username"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    autoCapitalize="none"
+                  />
+                </View>
 
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.label}>Email Address</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="Enter email"
-                        placeholderTextColor="rgba(255,255,255,0.4)"
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-                    </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Email Address</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Enter email"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
 
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.label}>Password</Text>
-                      <View style={styles.passwordContainer}>
-                        <TextInput
-                          style={styles.passwordInput}
-                          value={password}
-                          onChangeText={setPassword}
-                          placeholder="Enter password (min 8 chars)"
-                          placeholderTextColor="rgba(255,255,255,0.4)"
-                          secureTextEntry={!showPassword}
-                          autoCapitalize="none"
-                        />
-                        <TouchableOpacity
-                          onPress={() => setShowPassword(!showPassword)}
-                          style={styles.eyeIcon}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons
-                            name={showPassword ? 'eye-off' : 'eye'}
-                            size={20}
-                            color="#FFF5C2"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.label}>Confirm Password</Text>
-                      <View style={styles.passwordContainer}>
-                        <TextInput
-                          style={styles.passwordInput}
-                          value={confirmPassword}
-                          onChangeText={setConfirmPassword}
-                          placeholder="Re-enter password"
-                          placeholderTextColor="rgba(255,255,255,0.4)"
-                          secureTextEntry={!showConfirmPassword}
-                          autoCapitalize="none"
-                        />
-                        <TouchableOpacity
-                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                          style={styles.eyeIcon}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons
-                            name={showConfirmPassword ? 'eye-off' : 'eye'}
-                            size={20}
-                            color="#FFF5C2"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <View style={styles.checkboxContainer}>
-                      <TouchableOpacity
-                        style={styles.checkboxTouch}
-                        onPress={() => setTermsAccepted(!termsAccepted)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name={termsAccepted ? 'checkbox' : 'square-outline'}
-                          size={20}
-                          color={termsAccepted ? '#FFD700' : 'rgba(255,255,255,0.6)'}
-                        />
-                      </TouchableOpacity>
-                      <Text style={styles.checkboxLabel}>
-                        I agree to the{' '}
-                        <Text style={styles.linkLabel} onPress={handleOpenTerms}>
-                          Terms & Conditions
-                        </Text>{' '}
-                        and acknowledge that I have read the{' '}
-                        <Text style={styles.linkLabel} onPress={handleOpenPrivacy}>
-                          Privacy Policy
-                        </Text>
-                        .
-                      </Text>
-                    </View>
-
-                    {isLoading ? (
-                      <ActivityIndicator size="large" color="#FFD700" style={{ marginVertical: 20 }} />
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.actionButton, { opacity: termsAccepted ? 1 : 0.5 }]}
-                        onPress={handleRegister}
-                        activeOpacity={0.8}
-                        disabled={!termsAccepted}
-                      >
-                        <LinearGradient
-                          colors={['#AA820A', '#EBB828', '#FFF5C2', '#EBB828', '#AA820A']}
-                          start={{ x: 0, y: 0.5 }}
-                          end={{ x: 1, y: 0.5 }}
-                          style={styles.buttonGradient}
-                        >
-                          <Text style={styles.actionButtonText}>REGISTER PLAYER</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    )}
-
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Password</Text>
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="Enter password (min 8 chars)"
+                      placeholderTextColor="rgba(255,255,255,0.4)"
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                    />
                     <TouchableOpacity
-                      onPress={() => navigation.navigate('Login')}
-                      style={styles.loginLink}
+                      onPress={() => setShowPassword(!showPassword)}
+                      style={styles.eyeIcon}
+                      activeOpacity={0.7}
                     >
-                      <Text style={styles.loginText}>
-                        Already have an account? <Text style={styles.loginTextGold}>Sign In</Text>
-                      </Text>
+                      <Ionicons
+                        name={showPassword ? 'eye-off' : 'eye'}
+                        size={20}
+                        color="#FFF5C2"
+                      />
                     </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Confirm Password</Text>
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      placeholder="Re-enter password"
+                      placeholderTextColor="rgba(255,255,255,0.4)"
+                      secureTextEntry={!showConfirmPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                      style={styles.eyeIcon}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? 'eye-off' : 'eye'}
+                        size={20}
+                        color="#FFF5C2"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.checkboxContainer}>
+                  <TouchableOpacity
+                    style={styles.checkboxTouch}
+                    onPress={() => setTermsAccepted(!termsAccepted)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={termsAccepted ? 'checkbox' : 'square-outline'}
+                      size={20}
+                      color={termsAccepted ? '#FFD700' : 'rgba(255,255,255,0.6)'}
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.checkboxLabel}>
+                    I agree to the{' '}
+                    <Text style={styles.linkLabel} onPress={handleOpenTerms}>
+                      Terms & Conditions
+                    </Text>{' '}
+                    and acknowledge that I have read the{' '}
+                    <Text style={styles.linkLabel} onPress={handleOpenPrivacy}>
+                      Privacy Policy
+                    </Text>
+                    .
+                  </Text>
+                </View>
+
+                {isLoading ? (
+                  <ActivityIndicator size="large" color="#FFD700" style={{ marginVertical: 20 }} />
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.actionButton, { opacity: termsAccepted ? 1 : 0.5 }]}
+                    onPress={handleRegister}
+                    activeOpacity={0.8}
+                    disabled={!termsAccepted}
+                  >
+                    <LinearGradient
+                      colors={['#AA820A', '#EBB828', '#FFF5C2', '#EBB828', '#AA820A']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={styles.buttonGradient}
+                    >
+                      <Text style={styles.actionButtonText}>REGISTER PLAYER</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Login')}
+                  style={styles.loginLink}
+                >
+                  <Text style={styles.loginText}>
+                    Already have an account? <Text style={styles.loginTextGold}>Sign In</Text>
+                  </Text>
+                </TouchableOpacity>
 
               </View>
             </View>
@@ -248,8 +248,8 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: 'transparent',
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },

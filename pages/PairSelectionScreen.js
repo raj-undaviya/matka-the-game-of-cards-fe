@@ -33,11 +33,14 @@ export default function PairSelectionGameScreen({ route, navigation }) {
     roundNumber = 1,
     totalRounds = 10,
     slotNumber = 1,
+    isDailyMega = false,
+    country = 'India',
   } = route.params || {};
 
+  const [currentRound, setCurrentRound] = useState(Number(roundNumber) || 1);
   const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
   const [selectedCards, setSelectedCards] = useState([]);
-  const [timer, setTimer] = useState(30);
+  const [timer, setTimer] = useState(10);
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -47,22 +50,52 @@ export default function PairSelectionGameScreen({ route, navigation }) {
       .then(res => setBalance(res.balance || res.current_balance || 0))
       .catch(err => console.log('Error fetching balance:', err));
 
-    // Resolve active round if missing
-    if (!activeRoundId && poolId) {
+    // Resolve active round from pool leaderboard
+    if (poolId) {
       apiService.getPoolLeaderboard(poolId)
         .then(res => {
-          if (res.active_round_id) {
+          if (res && res.active_round_id) {
             setActiveRoundId(res.active_round_id);
           }
         })
         .catch(err => console.log('Error fetching pool round:', err));
     }
+  }, [poolId, initialRoundId, currentRound]);
 
+  // 10-second countdown timer per round
+  useEffect(() => {
     const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 30));
+      setTimer((prev) => {
+        if (prev <= 1) {
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(interval);
-  }, [poolId, initialRoundId]);
+  }, []);
+
+  // Handle 10-second timer timeout
+  useEffect(() => {
+    if (timer === 0) {
+      if (selectedCards.length === 2) {
+        handlePlaceBet();
+      } else {
+        if (currentRound < Number(totalRounds)) {
+          const nextR = currentRound + 1;
+          setCurrentRound(nextR);
+          setSelectedCards([]);
+          setTimer(10);
+        } else {
+          Alert.alert(
+            'Tournament Completed',
+            'All 10 rounds completed! Returning to Contest Pools.',
+            [{ text: 'OK', onPress: () => navigation.navigate('ContestPool', { gameVariation: 'V2', gameId: 5 }) }]
+          );
+        }
+      }
+    }
+  }, [timer]);
 
   const handleCardSelect = (card) => {
     if (selectedCards.includes(card)) {
@@ -74,81 +107,84 @@ export default function PairSelectionGameScreen({ route, navigation }) {
     }
   };
 
-  const handlePlaceBet = () => {
+  const handlePlaceBet = async () => {
+    if (loading) return;
     if (selectedCards.length !== 2) {
       Alert.alert('Invalid Selection', 'Please select exactly 2 cards (Open & Close)');
       return;
     }
 
-    Alert.alert(
-      'Confirm Pair Bet',
-      `Place bet on [ ${selectedCards.join(' & ')} ] for Round ${roundNumber} of ${totalRounds}?\nEntry Fee: ₹${entryFee}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm & Place',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              let rId = activeRoundId;
-              if (!rId && poolId) {
-                const lb = await apiService.getPoolLeaderboard(poolId);
-                rId = lb.active_round_id;
-              }
+    setLoading(true);
+    try {
+      let rId = activeRoundId;
+      if ((!rId || rId === poolId) && poolId) {
+        try {
+          const lb = await apiService.getPoolLeaderboard(poolId);
+          if (lb && lb.active_round_id) {
+            rId = lb.active_round_id;
+            setActiveRoundId(rId);
+          }
+        } catch (e) {
+          console.log('Error fetching leaderboard for round:', e);
+        }
+      }
 
-              if (!rId) {
-                const rounds = await apiService.getRounds('V2');
-                if (rounds && rounds.length > 0) {
-                  rId = rounds[0].id;
-                }
-              }
+      if (!rId) {
+        const rounds = await apiService.getRounds('V2');
+        if (rounds && rounds.length > 0) {
+          rId = rounds[0].id;
+          setActiveRoundId(rId);
+        }
+      }
 
-              if (!rId) {
-                Alert.alert('Error', 'Unable to find an active round. Please try again.');
-                setLoading(false);
-                return;
-              }
+      const targetId = rId || poolId;
+      if (!targetId) {
+        Alert.alert('Error', 'Unable to find an active round. Please try again.');
+        setLoading(false);
+        return;
+      }
 
-              const numList = selectedCards.map(c => c === 'A' ? 1 : Number(c));
-              await apiService.placeBet(rId, numList, entryFee);
+      const numList = selectedCards.map(c => c === 'A' ? 1 : Number(c));
+      const res = await apiService.placeBet(targetId, numList, entryFee);
+      const finalRoundId = res?.round || res?.round_id || rId || targetId;
 
-              navigation.replace('LiveGame', {
-                gameType: 'pair',
-                roundId: rId,
-                poolId,
-                selectedCards: selectedCards.join(','),
-                entryFee,
-                reward,
-                winningPrize,
-                roundNumber,
-                totalRounds,
-                slotNumber,
-              });
-            } catch (err) {
-              const errMsg = err.message || 'Failed to place bet';
-              if (errMsg.includes('already placed')) {
-                navigation.replace('LiveGame', {
-                  gameType: 'pair',
-                  roundId: activeRoundId,
-                  poolId,
-                  selectedCards: selectedCards.join(','),
-                  entryFee,
-                  reward,
-                  winningPrize,
-                  roundNumber,
-                  totalRounds,
-                  slotNumber,
-                });
-              } else {
-                Alert.alert('Bet Notice', errMsg);
-              }
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
+      navigation.replace('LiveGame', {
+        gameType: 'pair',
+        roundId: finalRoundId,
+        poolId,
+        selectedCards: selectedCards.join(','),
+        entryFee,
+        reward,
+        winningPrize,
+        roundNumber: currentRound,
+        totalRounds,
+        slotNumber,
+        isDailyMega,
+        country,
+      });
+    } catch (err) {
+      const errMsg = err.message || 'Failed to place bet';
+      if (errMsg.includes('already placed')) {
+        navigation.replace('LiveGame', {
+          gameType: 'pair',
+          roundId: activeRoundId || poolId,
+          poolId,
+          selectedCards: selectedCards.join(','),
+          entryFee,
+          reward,
+          winningPrize,
+          roundNumber: currentRound,
+          totalRounds,
+          slotNumber,
+          isDailyMega,
+          country,
+        });
+      } else {
+        Alert.alert('Bet Notice', errMsg);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -200,23 +236,29 @@ export default function PairSelectionGameScreen({ route, navigation }) {
             {/* Centered Contest Header */}
             <View style={styles.cardHeader}>
               <View style={styles.headerLine} />
-              <Text style={styles.cardTitle}>PAIR SELECTION</Text>
+              <Text style={styles.cardTitle}>
+                {isDailyMega ? '⭐ DAILY MEGA POOL' : entryFee === 10 ? '🎯 POOL 2: REGULAR POOL' : 'PAIR SELECTION'}
+              </Text>
               <View style={styles.headerLine} />
             </View>
 
             {/* Badges Bar */}
             <View style={styles.badgesRow}>
-              <View style={styles.slotBadge}>
-                <Text style={styles.slotBadgeText}>SLOT #{slotNumber}</Text>
+              <View style={[styles.slotBadge, isDailyMega && styles.megaSlotBadge]}>
+                <Text style={styles.slotBadgeText}>
+                  {isDailyMega ? 'MEGA POOL 1' : entryFee === 10 ? `POOL 2 • SLOT #${slotNumber}` : `SLOT #${slotNumber}`}
+                </Text>
               </View>
 
               <View style={styles.roundBadge}>
-                <Text style={styles.roundBadgeText}>ROUND {roundNumber}/{totalRounds}</Text>
+                <Text style={styles.roundBadgeText}>
+                  {`ROUND ${currentRound}/${totalRounds}`}
+                </Text>
               </View>
 
               <View style={styles.timerBadge}>
-                <Ionicons name="time-outline" size={13} color={timer < 10 ? '#FF4444' : '#FFD700'} />
-                <Text style={[styles.timerBadgeText, timer < 10 && styles.timerUrgent]}>
+                <Ionicons name="time-outline" size={13} color={timer < 4 ? '#FF4444' : '#FFD700'} />
+                <Text style={[styles.timerBadgeText, timer < 4 && styles.timerUrgent]}>
                   {timer}s Left
                 </Text>
               </View>
@@ -318,7 +360,7 @@ export default function PairSelectionGameScreen({ route, navigation }) {
                 ) : (
                   <Text style={styles.placeBetBtnText}>
                     {selectedCards.length === 2
-                      ? `PLACE BET · ${selectedCards.join(' & ')} (ROUND ${roundNumber}/${totalRounds})`
+                      ? `PLACE BET · ${selectedCards.join(' & ')} (ROUND ${currentRound}/${totalRounds})`
                       : `SELECT ${2 - selectedCards.length} MORE CARD${2 - selectedCards.length > 1 ? 'S' : ''}`}
                   </Text>
                 )}
@@ -438,6 +480,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#444444',
+  },
+  megaSlotBadge: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    borderColor: '#FFD700',
   },
   slotBadgeText: {
     color: '#FFF',

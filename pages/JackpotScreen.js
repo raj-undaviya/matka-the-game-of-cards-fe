@@ -13,66 +13,99 @@ const suits = ['♠', '♥', '♦', '♣'];
 const quickAmounts = [100, 250, 500, 1000, 2000, 5000];
 
 export default function LuckyDrawJackpotScreen({ route, navigation }) {
-  const { roundId } = route.params || {};
+  const {
+    roundId: initialRoundId,
+    poolId,
+    entryFee = 100,
+    winningPrize = 50000,
+    reward = 'Jackpot',
+    roundNumber = 1,
+    totalRounds = 10,
+    slotNumber = 1,
+    isDailyMega = false,
+    country = 'India',
+  } = route.params || {};
 
+  const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
   const [selectedCard, setSelectedCard] = useState(null);
-  const [betAmount, setBetAmount] = useState('');
+  const [betAmount, setBetAmount] = useState(String(entryFee || '100'));
   const [balance, setBalance] = useState(0);
   const [poolPrize, setPoolPrize] = useState(0);
 
   useEffect(() => {
     // Fetch wallet balance
     apiService.getWalletBalance()
-      .then(res => setBalance(res.balance))
+      .then(res => setBalance(res.balance || res.current_balance || 0))
       .catch(err => console.log('Error fetching balance:', err));
 
-    // Fetch live jackpot pool info
-    if (roundId) {
-      apiService.getRoundDetail(roundId)
+    if (poolId) {
+      apiService.getPoolLeaderboard(poolId)
         .then(res => {
-          // Total pool = sum of entry fees of all bets in this round
-          setPoolPrize(res.slots_filled * 100); // Or use real total pool if returned
+          if (res && res.active_round_id) {
+            setActiveRoundId(res.active_round_id);
+          }
+        })
+        .catch(err => console.log('Error fetching pool round:', err));
+    }
+
+    // Fetch live jackpot pool info
+    const rId = activeRoundId || initialRoundId;
+    if (rId) {
+      apiService.getRoundDetail(rId)
+        .then(res => {
+          setPoolPrize((res.slots_filled || 1) * 100);
         })
         .catch(err => console.log('Error fetching jackpot detail:', err));
     }
-  }, [roundId]);
+  }, [poolId, initialRoundId, activeRoundId]);
 
-  const handlePlaceBet = () => {
-    const amount = parseInt(betAmount);
+  const handlePlaceBet = async () => {
+    const amount = parseInt(betAmount) || entryFee || 100;
     if (!selectedCard) {
       Alert.alert('No Card Selected', 'Please pick your lucky card');
       return;
     }
-    if (!amount || amount < 100) {
-      Alert.alert('Invalid Amount', 'Minimum bet is ₹100');
-      return;
+    try {
+      const targetId = activeRoundId || initialRoundId || poolId;
+      const numVal = selectedCard === 'A' ? 1 : Number(selectedCard);
+      const res = await apiService.placeBet(targetId, [numVal], amount);
+      const finalRoundId = res?.round || res?.round_id || targetId;
+      
+      navigation.replace('LiveGame', {
+        gameType: 'jackpot',
+        roundId: finalRoundId,
+        poolId,
+        selectedCard,
+        entryFee: amount,
+        reward: 'Jackpot',
+        winningPrize,
+        roundNumber,
+        totalRounds,
+        slotNumber,
+        isDailyMega,
+        country,
+      });
+    } catch (err) {
+      const errMsg = err.message || 'Failed to place bet';
+      if (errMsg.includes('already placed')) {
+        navigation.replace('LiveGame', {
+          gameType: 'jackpot',
+          roundId: activeRoundId || initialRoundId || poolId,
+          poolId,
+          selectedCard,
+          entryFee: amount,
+          reward: 'Jackpot',
+          winningPrize,
+          roundNumber,
+          totalRounds,
+          slotNumber,
+          isDailyMega,
+          country,
+        });
+      } else {
+        Alert.alert('Bet Error', errMsg);
+      }
     }
-    Alert.alert(
-      '🎰 Confirm Jackpot Entry',
-      `Lucky Card: ${selectedCard}\nBet Amount: ₹${amount}\nWinner takes the entire pool!`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'ENTER JACKPOT',
-          onPress: async () => {
-            try {
-              const numVal = selectedCard === 'A' ? 1 : Number(selectedCard);
-              await apiService.placeBet(roundId, [numVal], amount);
-              
-              navigation.replace('LiveGame', {
-                gameType: 'jackpot',
-                roundId,
-                selectedCard,
-                entryFee: amount,
-                reward: 'Jackpot',
-              });
-            } catch (err) {
-              Alert.alert('Bet Error', err.message || 'Failed to place bet');
-            }
-          },
-        },
-      ]
-    );
   };
 
   return (

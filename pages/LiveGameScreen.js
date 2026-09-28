@@ -1,3 +1,4 @@
+// pages/LiveGameScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -31,7 +32,7 @@ const SUITS = ['♠', '♥', '♦', '♣'];
 export default function LiveGameScreen({ route, navigation }) {
   const params = route.params || {};
   const {
-    gameType = 'single',
+    gameType = 'pair',
     roundId,
     poolId,
     selectedCard,
@@ -43,20 +44,26 @@ export default function LiveGameScreen({ route, navigation }) {
     roundNumber = 1,
     totalRounds = 10,
     slotNumber = 1,
+    poolName = 'Tournament Pool',
   } = params;
 
   const userPick = selectedCard || selectedCards || selectedDigit || 'A';
   const userPickArray = selectedCards ? selectedCards.split(',') : [userPick];
 
-  const [phase, setPhase] = useState('waiting');
-  const [countdown, setCountdown] = useState(3);
-  const [waitTimer, setWaitTimer] = useState(5);
+  // Phases: 'countdown' (5s Reveal Countdown) -> 'revealing' (5s Card Hold Duration)
+  const [phase, setPhase] = useState('countdown');
+  const [countdown, setCountdown] = useState(5);
+  const [holdCountdown, setHoldCountdown] = useState(5);
   const [drawnCardsList, setDrawnCardsList] = useState([]);
+  const [drawnRawNumbers, setDrawnRawNumbers] = useState([]);
+  const [didUserWin, setDidUserWin] = useState(false);
   const [balance, setBalance] = useState(0);
 
   const glowAnim = useRef(new Animated.Value(0)).current;
   const flipAnim = useRef(new Animated.Value(0)).current;
+  const hasNavigatedRef = useRef(false);
 
+  // Initial balance & animation
   useEffect(() => {
     apiService.getWalletBalance()
       .then(res => setBalance(res.balance || res.current_balance || 0))
@@ -70,116 +77,158 @@ export default function LiveGameScreen({ route, navigation }) {
     ).start();
   }, [glowAnim]);
 
-  // Main Polling Loop to check active Django Round Status
+  // Fetch / prepare winning drawn cards
   useEffect(() => {
-    if (!roundId) return;
+    let isMounted = true;
 
-    const interval = setInterval(async () => {
-      try {
-        const detail = await apiService.getRoundDetail(roundId);
-        
-        const slotsLeft = Math.max(0, (detail.max_slots || 5) - (detail.slots_filled || 1));
-        setWaitTimer(slotsLeft);
+    const prepareCards = (drawnRaw) => {
+      const mappedCards = drawnRaw.map((n, idx) => {
+        const cardVal = n === 1 ? 'A' : String(n);
+        const suit = SUITS[idx % 4] || '♠';
+        const isRed = suit === '♥' || suit === '♦';
+        return { val: cardVal, num: n, suit, isRed, full: `${cardVal} ${suit}` };
+      });
 
-        if (detail.status === 'drawing') {
-          setPhase('countdown');
-        } else if (detail.status === 'completed') {
-          clearInterval(interval);
-          setPhase('revealing');
+      if (isMounted) {
+        setDrawnCardsList(mappedCards);
+        setDrawnRawNumbers(drawnRaw);
 
-          Animated.spring(flipAnim, {
-            toValue: 1,
-            friction: 6,
-            tension: 40,
-            useNativeDriver: true,
-          }).start();
+        // Compute local win
+        let didWin = false;
+        if (gameType === 'single') {
+          didWin = userPick === mappedCards[0]?.val;
+        } else if (gameType === 'pair') {
+          const pickedArr = selectedCards ? selectedCards.split(',') : [];
+          const pickedNums = pickedArr.map(c => c === 'A' ? 1 : Number(c));
+          if (drawnRaw.length >= 2 && pickedNums.length >= 2) {
+            didWin = pickedNums[0] === drawnRaw[0] && pickedNums[1] === drawnRaw[1];
+          } else {
+            didWin = pickedArr[0] === mappedCards[0]?.val && pickedArr[1] === mappedCards[1]?.val;
+          }
+        } else if (gameType === 'trio') {
+          const pickedArr = selectedCards ? selectedCards.split(',') : [];
+          const pickedNums = pickedArr.map(c => c === 'A' ? 1 : Number(c));
+          const allSame = (drawnRaw[0] === drawnRaw[1] && drawnRaw[1] === drawnRaw[2]);
+          if (allSame) {
+            didWin = pickedNums.every(n => n === drawnRaw[0]);
+          } else {
+            didWin = pickedNums.some(n => drawnRaw.includes(n));
+          }
+        } else if (gameType === 'lastDigitSum') {
+          const sum = drawnRaw.reduce((a, b) => a + b, 0);
+          const lastDigit = sum % 10;
+          didWin = Number(selectedDigit) === lastDigit;
+        } else if (gameType === 'jackpot') {
+          didWin = userPick === mappedCards[0]?.val;
+        }
+        setDidUserWin(didWin);
+      }
+    };
 
-          const drawnRaw = Array.isArray(detail.drawn_numbers) && detail.drawn_numbers.length > 0
+    if (roundId) {
+      apiService.getRoundDetail(roundId)
+        .then((detail) => {
+          if (!isMounted) return;
+          const raw = Array.isArray(detail?.drawn_numbers) && detail.drawn_numbers.length > 0
             ? detail.drawn_numbers
             : (gameType === 'pair' ? [1, 7] : [7]);
+          prepareCards(raw);
+        })
+        .catch(() => {
+          if (!isMounted) return;
+          prepareCards(gameType === 'pair' ? [1, 7] : [7]);
+        });
+    } else {
+      prepareCards(gameType === 'pair' ? [1, 7] : [7]);
+    }
 
-          const mappedCards = drawnRaw.map((n, idx) => {
-            const cardVal = n === 1 ? 'A' : String(n);
-            const suit = SUITS[idx % 4] || '♠';
-            const isRed = suit === '♥' || suit === '♦';
-            return { val: cardVal, num: n, suit, isRed, full: `${cardVal} ${suit}` };
-          });
+    return () => {
+      isMounted = false;
+    };
+  }, [roundId, gameType, userPick, selectedCards, selectedDigit]);
 
-          setDrawnCardsList(mappedCards);
-
-          // Calculate win locally
-          let didWin = false;
-          if (gameType === 'single') {
-            didWin = userPick === mappedCards[0]?.val;
-          } else if (gameType === 'pair') {
-            const pickedArr = selectedCards?.split(',') || [];
-            const pickedNums = pickedArr.map(c => c === 'A' ? 1 : Number(c));
-            if (drawnRaw.length >= 2 && pickedNums.length >= 2) {
-              didWin = pickedNums[0] === drawnRaw[0] && pickedNums[1] === drawnRaw[1];
-            } else {
-              didWin = pickedArr[0] === mappedCards[0]?.val && pickedArr[1] === mappedCards[1]?.val;
-            }
-          } else if (gameType === 'trio') {
-            const pickedArr = selectedCards?.split(',') || [];
-            const pickedNums = pickedArr.map(c => c === 'A' ? 1 : Number(c));
-            const allSame = (drawnRaw[0] === drawnRaw[1] && drawnRaw[1] === drawnRaw[2]);
-            if (allSame) {
-              didWin = pickedNums.every(n => n === drawnRaw[0]);
-            } else {
-              didWin = pickedNums.some(n => drawnRaw.includes(n));
-            }
-          } else if (gameType === 'lastDigitSum') {
-            const sum = drawnRaw.reduce((a, b) => a + b, 0);
-            const lastDigit = sum % 10;
-            didWin = Number(selectedDigit) === lastDigit;
-          } else if (gameType === 'jackpot') {
-            didWin = userPick === mappedCards[0]?.val;
-          }
-
-          setTimeout(() => {
-            navigation.replace('Winning', {
-              gameType,
-              reward,
-              entryFee,
-              winningPrize,
-              drawnCards: mappedCards.map(c => c.full),
-              drawnNumbers: drawnRaw,
-              drawnCard: mappedCards.map(c => c.full).join(' & '),
-              userCards: userPickArray,
-              userPick,
-              won: String(didWin),
-              roundId,
-              poolId,
-              roundNumber,
-              totalRounds,
-              slotNumber,
-            });
-          }, 2400);
-        }
-      } catch (e) {
-        console.log('Error polling round status:', e);
-      }
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [roundId, gameType, userPick, selectedCards, selectedDigit, poolId, roundNumber, totalRounds, slotNumber]);
-
+  // Stage 1: 5-Second Reveal Countdown (5s -> 0s)
   useEffect(() => {
     if (phase !== 'countdown') return;
-    if (countdown <= 0) return;
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, countdown]);
+
+    if (countdown <= 0) {
+      setPhase('revealing');
+      setHoldCountdown(5);
+      Animated.spring(flipAnim, {
+        toValue: 1,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((c) => c - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [phase, countdown, flipAnim]);
+
+  // Stage 2: 5-Second Hold Duration (5s -> 0s) then Atomic Navigate to WinningScreen
+  useEffect(() => {
+    if (phase !== 'revealing') return;
+
+    if (holdCountdown <= 0) {
+      if (!hasNavigatedRef.current) {
+        hasNavigatedRef.current = true;
+        const currentCards = drawnCardsList.length > 0
+          ? drawnCardsList
+          : (gameType === 'pair' ? [
+              { val: 'A', num: 1, suit: '♠', isRed: false, full: 'A ♠' },
+              { val: '7', num: 7, suit: '♥', isRed: true, full: '7 ♥' }
+            ] : [
+              { val: '7', num: 7, suit: '♥', isRed: true, full: '7 ♥' }
+            ]);
+        const currentRaw = drawnRawNumbers.length > 0
+          ? drawnRawNumbers
+          : (gameType === 'pair' ? [1, 7] : [7]);
+
+        navigation.replace('Winning', {
+          gameType,
+          reward,
+          entryFee,
+          winningPrize,
+          drawnCards: currentCards.map(c => c.full),
+          drawnNumbers: currentRaw,
+          drawnCard: currentCards.map(c => c.full).join(' & '),
+          userCards: userPickArray,
+          userPick,
+          won: String(didUserWin),
+          roundId,
+          poolId,
+          roundNumber,
+          totalRounds,
+          slotNumber,
+          poolName,
+          accumulatedPoints: params.accumulatedPoints || 0,
+        });
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setHoldCountdown((h) => h - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [phase, holdCountdown, drawnCardsList, drawnRawNumbers, didUserWin, navigation, gameType, reward, entryFee, winningPrize, userPickArray, userPick, roundId, poolId, roundNumber, totalRounds, slotNumber, poolName, params]);
 
   const circleRadius = 125;
   const centerX = width / 2;
   const arenaCenter = 195;
 
-  const statusText =
-    phase === 'waiting' ? `FILLING SLOTS · ${waitTimer} slots left` :
-    phase === 'countdown' ? `REVEALING IN ${countdown}…` : 'WINNING CARDS REVEALED!';
-
   const isPairMode = gameType === 'pair' || userPickArray.length === 2;
+
+  const statusText =
+    phase === 'countdown'
+      ? `REVEALING CARDS IN ${countdown}s…`
+      : `⭐ WINNING CARDS REVEALED · HOLDING ${holdCountdown}s`;
 
   return (
     <LinearGradient colors={['#5a0000', '#120000']} style={styles.mainBackground}>
@@ -224,24 +273,23 @@ export default function LiveGameScreen({ route, navigation }) {
         {/* ── Sub Header Status Bar ── */}
         <View style={styles.subHeaderBar}>
           <View style={styles.slotBadge}>
-            <Text style={styles.slotBadgeText}>SLOT #{slotNumber}</Text>
+            <Text style={styles.slotBadgeText}>{poolName.toUpperCase()}</Text>
           </View>
           <View style={styles.roundBadge}>
-            <Text style={styles.roundBadgeText}>ROUND {roundNumber}/{totalRounds}</Text>
+            <Text style={styles.roundBadgeText}>ROUND {roundNumber} / {totalRounds}</Text>
           </View>
           <View style={styles.timerBadge}>
-            <Ionicons name="time-outline" size={13} color={phase === 'waiting' ? '#FFD700' : '#FF4444'} />
-            <Text style={[styles.timerBadgeText, phase !== 'waiting' && styles.timerUrgent]}>
-              {phase === 'waiting' ? `${waitTimer}s` : `${countdown}s`}
+            <Ionicons name="time-outline" size={13} color="#FFD700" />
+            <Text style={styles.timerBadgeText}>
+              {phase === 'countdown' ? `${countdown}s` : `${holdCountdown}s`}
             </Text>
           </View>
         </View>
 
-        {/* Main Status Text */}
         <Text style={styles.statusText}>{statusText}</Text>
 
-        {/* ── Arena Table (Perfect Centered Circle) ── */}
-        <View style={[styles.arena, { height: arenaCenter * 2 + 10 }]}>
+        {/* ── Casino Circular Arena ── */}
+        <View style={[styles.arena, { height: arenaCenter * 2 }]}>
           {MOCK_PLAYERS.map((p) => {
             const rad = (p.angle * Math.PI) / 180;
             const px = centerX + circleRadius * Math.cos(rad) - 28;
@@ -265,58 +313,44 @@ export default function LiveGameScreen({ route, navigation }) {
             );
           })}
 
-          {/* Center Arena Cards (Centered) */}
-          <View style={[styles.centerCardsWrap, { top: arenaCenter - 80 }]}>
-            {phase === 'revealing' && isPairMode && drawnCardsList.length >= 2 ? (
-              // ── TWO WINNING CARDS (Pair Mode) ──
+          {/* Center Card / Pair Cards Box */}
+          <View style={[styles.centerCardsWrap, { top: arenaCenter - 65 }]}>
+            {phase === 'revealing' && drawnCardsList.length >= 2 ? (
+              // ── 2 REVEALED CARDS FOR PAIR SELECTION ──
               <View style={styles.pairCardsRow}>
-                {/* Card 1 (Open) */}
-                <LinearGradient
-                  colors={['#ffffff', '#f8fafc']}
-                  style={[styles.pairCardItem, { borderColor: '#06B6D4' }]}
-                >
-                  <View style={[styles.cardTag, { backgroundColor: '#0891b2' }]}>
-                    <Text style={styles.cardTagText}>OPEN</Text>
-                  </View>
-                  <Text style={[
-                    styles.pairCardValue,
-                    { color: drawnCardsList[0]?.isRed ? '#C20005' : '#0f172a' }
-                  ]}>
-                    {drawnCardsList[0]?.val}
-                  </Text>
-                  <Text style={[
-                    styles.pairCardSuit,
-                    { color: drawnCardsList[0]?.isRed ? '#C20005' : '#0f172a' }
-                  ]}>
-                    {drawnCardsList[0]?.suit}
-                  </Text>
-                </LinearGradient>
-
-                {/* Card 2 (Close) */}
-                <LinearGradient
-                  colors={['#ffffff', '#f8fafc']}
-                  style={[styles.pairCardItem, { borderColor: '#FFD700' }]}
-                >
-                  <View style={[styles.cardTag, { backgroundColor: '#b45309' }]}>
-                    <Text style={styles.cardTagText}>CLOSE</Text>
-                  </View>
-                  <Text style={[
-                    styles.pairCardValue,
-                    { color: drawnCardsList[1]?.isRed ? '#C20005' : '#0f172a' }
-                  ]}>
-                    {drawnCardsList[1]?.val}
-                  </Text>
-                  <Text style={[
-                    styles.pairCardSuit,
-                    { color: drawnCardsList[1]?.isRed ? '#C20005' : '#0f172a' }
-                  ]}>
-                    {drawnCardsList[1]?.suit}
-                  </Text>
-                </LinearGradient>
+                {drawnCardsList.slice(0, 2).map((c, idx) => (
+                  <LinearGradient
+                    key={idx}
+                    colors={['#ffffff', '#f4f4f4']}
+                    style={[
+                      styles.pairCardItem,
+                      { borderColor: idx === 0 ? '#06B6D4' : '#FFD700' },
+                    ]}
+                  >
+                    <View style={[
+                      styles.cardTag,
+                      { backgroundColor: idx === 0 ? '#0891b2' : '#b45309' }
+                    ]}>
+                      <Text style={styles.cardTagText}>{idx === 0 ? 'OPEN' : 'CLOSE'}</Text>
+                    </View>
+                    <Text style={[
+                      styles.pairCardValue,
+                      { color: c.isRed ? '#C20005' : '#0f172a' }
+                    ]}>
+                      {c.val}
+                    </Text>
+                    <Text style={[
+                      styles.pairCardSuit,
+                      { color: c.isRed ? '#C20005' : '#0f172a' }
+                    ]}>
+                      {c.suit}
+                    </Text>
+                  </LinearGradient>
+                ))}
               </View>
-            ) : phase === 'revealing' && drawnCardsList.length > 0 ? (
-              // ── SINGLE CARD REVEAL ──
-              <LinearGradient colors={['#ffffff', '#f8fafc']} style={styles.singleCardItem}>
+            ) : phase === 'revealing' && drawnCardsList.length === 1 ? (
+              // ── 1 REVEALED CARD FOR SINGLE CARD ──
+              <LinearGradient colors={['#ffffff', '#f4f4f4']} style={styles.singleCardItem}>
                 <Text style={[
                   styles.pairCardValue,
                   { color: drawnCardsList[0]?.isRed ? '#C20005' : '#0f172a' }
@@ -347,11 +381,11 @@ export default function LiveGameScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* ── Bottom Bet Strip (Gold Border Glass Container) ── */}
+        {/* ── Bottom Bet Strip ── */}
         <View style={styles.betStripContainer}>
           <View style={styles.betStripItem}>
             <Text style={styles.betStripLabel}>YOUR PICK</Text>
-            <Text style={styles.betStripValue}>{userPick.replace(',', ' & ')}</Text>
+            <Text style={styles.betStripValue}>{String(userPick).replace(',', ' & ')}</Text>
           </View>
           <View style={styles.betStripDivider} />
           <View style={styles.betStripItem}>
@@ -477,9 +511,6 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 11,
     fontWeight: '800',
-  },
-  timerUrgent: {
-    color: '#FF4444',
   },
   statusText: {
     color: '#FFD700',
