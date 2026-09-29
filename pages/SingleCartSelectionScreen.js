@@ -1,637 +1,658 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View, Text, TouchableOpacity,
-    SafeAreaView, Alert, Dimensions, ScrollView,
-    StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  Dimensions,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, FontAwesome } from '@expo/vector-icons';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { apiService } from '../services/apiService';
-import { Ionicons } from '@expo/vector-icons';
-import LeaderboardScreen from '../components/LeaderBoard';
-import Svg, { Rect, Path, G, Line } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
-const CARD_SIZE = (width - 72) / 5; // 5 cards per row
+const CARD_SIZE = (width - 70) / 5;
 
 const cards = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const suits = ['♠', '♥', '♦', '♣'];
 
-// Premium Casino Card Back Component
-function PlayingCardBack({ width, height, style }) {
-    // Generate mesh lines for the lattice pattern
-    const meshLines = [];
-    for (let i = -10; i < 20; i++) {
-        meshLines.push(
-            <React.Fragment key={i}>
-                <Line x1={i * 12} y1={-10} x2={i * 12 + 80} y2={160} stroke="#A00000" strokeWidth={1.5} />
-                <Line x1={i * 12} y1={160} x2={i * 12 + 80} y2={-10} stroke="#A00000" strokeWidth={1.5} />
-            </React.Fragment>
-        );
+export default function SingleCardGameScreen({ route, navigation }) {
+  const {
+    roundId: initialRoundId,
+    poolId,
+    entryFee = 100,
+    winningPrize = 1000,
+    reward = '10x',
+    roundNumber = 1,
+    totalRounds = 10,
+    slotNumber = 1,
+    isDailyMega = false,
+    country = 'India',
+    poolName,
+    poolType,
+  } = route.params || {};
+
+  const [currentRound, setCurrentRound] = useState(Number(roundNumber) || 1);
+  const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [timer, setTimer] = useState(10);
+  const [balance, setBalance] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Fetch wallet balance
+    apiService.getWalletBalance()
+      .then(res => setBalance(res.balance || res.current_balance || 0))
+      .catch(err => console.log('Error fetching balance:', err));
+
+    // Resolve active round from pool leaderboard
+    if (poolId) {
+      apiService.getPoolLeaderboard(poolId)
+        .then(res => {
+          if (res && res.active_round_id) {
+            setActiveRoundId(res.active_round_id);
+          }
+        })
+        .catch(err => console.log('Error fetching pool round:', err));
+    }
+  }, [poolId, initialRoundId, currentRound]);
+
+  // 10-second countdown timer per round
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle 10-second timer timeout
+  useEffect(() => {
+    if (timer === 0) {
+      if (selectedCard) {
+        handlePlaceBet();
+      } else {
+        if (currentRound < Number(totalRounds)) {
+          const nextR = currentRound + 1;
+          setCurrentRound(nextR);
+          setSelectedCard(null);
+          setTimer(10);
+        } else {
+          Alert.alert(
+            'Tournament Completed',
+            'All rounds completed! Returning to Contest Pools.',
+            [{ text: 'OK', onPress: () => navigation.navigate('ContestPool', { gameVariation: 'V1', gameId: 1 }) }]
+          );
+        }
+      }
+    }
+  }, [timer]);
+
+  const handleCardSelect = (card) => {
+    if (selectedCard === card) {
+      setSelectedCard(null);
+    } else {
+      setSelectedCard(card);
+    }
+  };
+
+  const mapCardToNumber = (cardStr) => {
+    if (cardStr === 'A') return 1;
+    return Number(cardStr);
+  };
+
+  const handlePlaceBet = async () => {
+    if (loading) return;
+    if (!selectedCard) {
+      Alert.alert('No Card Selected', 'Please select 1 card to place your bet');
+      return;
     }
 
-    return (
-        <View style={[{
-            width,
-            height,
-            backgroundColor: '#ffffff',
-            borderRadius: 10,
-            padding: 3,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 4,
-        }, style]}>
-            <View style={{ flex: 1, backgroundColor: '#8B0000', borderRadius: 7, overflow: 'hidden' }}>
-                <Svg width="100%" height="100%" viewBox="0 0 100 145">
-                    {/* Inner dash border */}
-                    <Rect x="5" y="5" width="90" height="135" rx="5" fill="none" stroke="#ffffff" strokeWidth="1" strokeDasharray="3, 3" />
-                    {/* Inner gold border */}
-                    <Rect x="8" y="8" width="84" height="129" rx="3" fill="none" stroke="#C59B27" strokeWidth="1" />
-                    
-                    {/* Grid mesh lattice */}
-                    <G opacity={0.6}>
-                        {meshLines}
-                    </G>
-
-                    {/* Central Gold/White Diamond Emblem */}
-                    <G transform="translate(50, 72.5)">
-                        <Path d="M 0 -22 L 18 0 L 0 22 L -18 0 Z" fill="#8B0000" stroke="#C59B27" strokeWidth="1.5" />
-                        <Path d="M 0 -15 L 12 0 L 0 15 L -12 0 Z" fill="none" stroke="#ffffff" strokeWidth="1" />
-                        <Path d="M 0 -7 L 6 0 L 0 7 L -6 0 Z" fill="#C59B27" />
-                    </G>
-                </Svg>
-            </View>
-        </View>
-    );
-}
-
-export default function SingleCardGameScreen({ route, navigation }) {
-    const {
-        roundId: initialRoundId,
-        poolId,
-        entryFee = 100,
-        winningPrize = 1000,
-        reward = '10x',
-        roundNumber = 1,
-        totalRounds = 10,
-        slotNumber = 1,
-        isDailyMega = false,
-        country = 'India',
-    } = route.params || {};
-
-    const [currentRound, setCurrentRound] = useState(Number(roundNumber) || 1);
-    const [activeRoundId, setActiveRoundId] = useState(initialRoundId);
-    const [selectedCard, setSelectedCard] = useState(null);
-    const [timer, setTimer] = useState(10);
-    const [balance, setBalance] = useState(0);
-    const [slotsOccupied, setSlotsOccupied] = useState(0);
-
-    useEffect(() => {
-        // Fetch wallet balance
-        apiService.getWalletBalance()
-            .then(res => setBalance(res.balance || res.current_balance || 0))
-            .catch(err => console.log('Error fetching balance:', err));
-
-        // Resolve active round from pool leaderboard if in a pool
-        if (poolId) {
-            apiService.getPoolLeaderboard(poolId)
-                .then(res => {
-                    if (res && res.active_round_id) {
-                        setActiveRoundId(res.active_round_id);
-                    }
-                })
-                .catch(err => console.log('Error fetching pool round:', err));
-        }
-
-        // Fetch live slot occupancy
-        const rId = activeRoundId || initialRoundId;
-        if (rId) {
-            apiService.getRoundDetail(rId)
-                .then(res => setSlotsOccupied(res.slots_filled || 0))
-                .catch(err => console.log('Error fetching round info:', err));
-        }
-    }, [poolId, initialRoundId, activeRoundId, currentRound]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setTimer((prev) => {
-                if (prev <= 1) return 0;
-                return prev - 1;
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    useEffect(() => {
-        if (timer === 0) {
-            if (selectedCard) {
-                handlePlaceBet();
-            } else {
-                if (currentRound < Number(totalRounds)) {
-                    const nextR = currentRound + 1;
-                    setCurrentRound(nextR);
-                    setSelectedCard(null);
-                    setTimer(10);
-                } else {
-                    Alert.alert('Completed', 'All rounds completed!');
-                }
-            }
-        }
-    }, [timer]);
-
-    const mapCardToNumber = (cardStr) => {
-        if (cardStr === 'A') return 1;
-        return Number(cardStr);
-    };
-
-    const [loading, setLoading] = useState(false);
-
-    const handlePlaceBet = async () => {
-        if (loading) return;
-        if (!selectedCard) {
-            Alert.alert('No Card Selected', 'Please select a card before placing bet');
-            return;
-        }
-        setLoading(true);
+    setLoading(true);
+    try {
+      let rId = activeRoundId;
+      if ((!rId || rId === poolId) && poolId) {
         try {
-            const targetId = activeRoundId || initialRoundId || poolId;
-            const numVal = mapCardToNumber(selectedCard);
-            const res = await apiService.placeBet(targetId, [numVal], entryFee);
-            const finalRoundId = res?.round || res?.round_id || targetId;
-
-            navigation.replace('LiveGame', {
-                gameType: 'single',
-                roundId: finalRoundId,
-                poolId,
-                selectedCard,
-                entryFee,
-                reward,
-                winningPrize,
-                roundNumber: currentRound,
-                totalRounds,
-                slotNumber,
-                isDailyMega,
-                country,
-            });
-        } catch (err) {
-            const errMsg = err.message || 'Failed to place bet';
-            if (errMsg.includes('already placed')) {
-                navigation.replace('LiveGame', {
-                    gameType: 'single',
-                    roundId: activeRoundId || initialRoundId || poolId,
-                    poolId,
-                    selectedCard,
-                    entryFee,
-                    reward,
-                    winningPrize,
-                    roundNumber: currentRound,
-                    totalRounds,
-                    slotNumber,
-                    isDailyMega,
-                    country,
-                });
-            } else {
-                Alert.alert('Bet Error', errMsg);
-            }
+          const lb = await apiService.getPoolLeaderboard(poolId);
+          if (lb && lb.active_round_id) {
+            rId = lb.active_round_id;
+            setActiveRoundId(rId);
+          }
+        } catch (e) {
+          console.log('Error fetching leaderboard for round:', e);
         }
-    };
+      }
 
-    const getSelectedCardText = () => {
-        if (!selectedCard) return 'None';
-        const index = cards.indexOf(selectedCard);
-        return `${selectedCard} ${suits[index % 4]}`;
-    };
+      if (!rId) {
+        const rounds = await apiService.getRounds('V1');
+        if (rounds && rounds.length > 0) {
+          rId = rounds[0].id;
+          setActiveRoundId(rId);
+        }
+      }
 
-    return (
-        <SafeAreaView style={localStyles.container}>
-            {/* Header / Navbar */}
-            <View style={localStyles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="arrow-back" size={20} color="#B22222" style={{ marginRight: 6 }} />
-                    <Text style={localStyles.backButton}>Back</Text>
-                </TouchableOpacity>
-                <Text style={localStyles.headerTitle}>Single Card Game</Text>
-                <View style={localStyles.coinBalance}>
-                    <Text style={localStyles.coinText}>🪙 {Number(balance).toLocaleString()}</Text>
-                </View>
+      const targetId = rId || poolId;
+      if (!targetId) {
+        Alert.alert('Error', 'Unable to find an active round. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      const numVal = mapCardToNumber(selectedCard);
+      const res = await apiService.placeBet(targetId, [numVal], entryFee);
+      const finalRoundId = res?.round || res?.round_id || rId || targetId;
+
+      navigation.replace('LiveGame', {
+        gameType: 'single',
+        roundId: finalRoundId,
+        poolId,
+        selectedCard,
+        entryFee,
+        reward,
+        winningPrize,
+        roundNumber: currentRound,
+        totalRounds,
+        slotNumber,
+        isDailyMega,
+        country,
+        poolName,
+        poolType,
+      });
+    } catch (err) {
+      const errMsg = err.message || 'Failed to place bet';
+      if (errMsg.includes('already placed')) {
+        navigation.replace('LiveGame', {
+          gameType: 'single',
+          roundId: activeRoundId || poolId,
+          poolId,
+          selectedCard,
+          entryFee,
+          reward,
+          winningPrize,
+          roundNumber: currentRound,
+          totalRounds,
+          slotNumber,
+          isDailyMega,
+          country,
+          poolName,
+          poolType,
+        });
+      } else {
+        Alert.alert('Bet Notice', errMsg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <LinearGradient colors={['#5a0000', '#120000']} style={styles.mainBackground}>
+      <SafeAreaView style={styles.safeContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#5a0000" />
+
+        {/* ── Top Header Row (Matches ContestPoolScreen) ── */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+
+          <View style={styles.chainDecorContainer}>
+            <Svg height="30" width="140" viewBox="0 0 140 30" style={styles.chainSvg}>
+              <Path
+                d="M 5,0 Q 70,28 135,0"
+                fill="none"
+                stroke="#D4AF37"
+                strokeWidth="2"
+                strokeDasharray="4 4"
+              />
+              <Circle cx="70" cy="14" r="2.5" fill="#D4AF37" />
+            </Svg>
+            <View style={styles.chainStar}>
+              <FontAwesome name="star" size={13} color="#FFF5C2" />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.walletBtn}
+            onPress={() => navigation.navigate('Wallet')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.walletBtnText}>₹{Number(balance).toLocaleString()}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Main Frame (Gold Border Frame matching ContestPool) ── */}
+        <View style={styles.cardWrapper}>
+          <LinearGradient
+            colors={['rgba(78, 8, 8, 0.85)', 'rgba(30, 3, 3, 0.95)']}
+            style={styles.cardContent}
+          >
+            {/* Centered Contest Header */}
+            <View style={styles.cardHeader}>
+              <View style={styles.headerLine} />
+              <Text style={styles.cardTitle}>
+                {isDailyMega ? '⭐ DAILY MEGA POOL' : (poolName || 'SINGLE CARD GAME')}
+              </Text>
+              <View style={styles.headerLine} />
             </View>
 
-            {/* Info bar */}
-            <View style={localStyles.infoBar}>
-                {[
-                    { label: 'Timer', value: `${timer}s`, color: timer < 10 ? '#FF6B6B' : '#2C1E15' },
-                    poolId
-                      ? { label: 'Round', value: `${roundNumber}/${totalRounds}`, color: '#00C853' }
-                      : { label: 'Slots', value: `${slotsOccupied}/5` },
-                    { label: 'Reward', value: reward || 'x10', color: '#C59B27' },
-                ].map((item, i) => (
-                    <View key={i} style={localStyles.infoItem}>
-                        <Text style={localStyles.infoLabel}>{item.label}</Text>
-                        <Text style={[localStyles.infoValue, { color: item.color || '#2C1E15' }]}>
-                            {item.value}
-                        </Text>
-                    </View>
-                ))}
+            {/* Badges Bar */}
+            <View style={styles.badgesRow}>
+              <View style={[styles.slotBadge, isDailyMega && styles.megaSlotBadge]}>
+                <Text style={styles.slotBadgeText}>
+                  {isDailyMega ? 'MEGA POOL 1' : (poolName?.includes('Hourly') ? poolName.toUpperCase() : `POOL 1 • SLOT #${slotNumber}`)}
+                </Text>
+              </View>
+
+              <View style={styles.roundBadge}>
+                <Text style={styles.roundBadgeText}>
+                  {`ROUND ${currentRound}/${totalRounds}`}
+                </Text>
+              </View>
+
+              <View style={styles.timerBadge}>
+                <Ionicons name="time-outline" size={13} color={timer < 4 ? '#FF4444' : '#FFD700'} />
+                <Text style={[styles.timerBadgeText, timer < 4 && styles.timerUrgent]}>
+                  {timer}s Left
+                </Text>
+              </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={localStyles.scrollContent}>
-                {/* 1. Select Card Panel (White Card Layout) */}
-                <View style={localStyles.selectionCard}>
-                    <Text style={localStyles.panelTitle}>1. Select Your Card</Text>
-                    <View style={localStyles.divider} />
+            {/* Sub-instruction */}
+            <View style={styles.instructionWrap}>
+              <Text style={styles.instructionTitle}>Pick 1 Lucky Card</Text>
+              <Text style={styles.instructionSub}>
+                {selectedCard ? `Selected Card: [ ${selectedCard} ] — Ready to place bet` : 'Select 1 card to place your bet'}
+              </Text>
+            </View>
 
-                    <View style={localStyles.controlGroup}>
-                        <Text style={localStyles.controlLabel}>Select Card (A-10 with Pre-assigned Suits)</Text>
-                        
-                        <View style={localStyles.cardsContainer}>
-                            {cards.map((card, index) => {
-                                const isSelected = selectedCard === card;
-                                const suit = suits[index % 4];
-                                const isRed = suit === '♥' || suit === '♦';
-                                const cardColor = isRed ? '#B22222' : '#2C1E15';
+            {/* Cards Grid */}
+            <View style={styles.cardsContainer}>
+              {cards.map((card, index) => {
+                const isSelected = selectedCard === card;
+                const suit = suits[index % 4];
+                const isRed = suit === '♥' || suit === '♦';
 
-                                return (
-                                    <TouchableOpacity
-                                        key={index}
-                                        style={[
-                                            localStyles.cardButton,
-                                            { width: CARD_SIZE, height: CARD_SIZE * 1.35 },
-                                            isSelected && localStyles.cardButtonActive
-                                        ]}
-                                        onPress={() => setSelectedCard(card)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={[
-                                            localStyles.cardButtonText,
-                                            { color: isSelected ? '#FFFFFF' : cardColor, fontSize: 13 }
-                                        ]}>
-                                            {card} {suit}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.cardItem,
+                      isSelected && styles.cardItemSelected,
+                      { width: CARD_SIZE, height: CARD_SIZE * 1.38 },
+                    ]}
+                    onPress={() => handleCardSelect(card)}
+                    activeOpacity={0.75}
+                  >
+                    <LinearGradient
+                      colors={isSelected ? ['#FFD700', '#FFA000', '#D4AF37'] : ['#ffffff', '#f4f4f4']}
+                      style={styles.cardInner}
+                    >
+                      {isSelected && (
+                        <View style={styles.selectionIndexBadge}>
+                          <Text style={styles.selectionIndexText}>★</Text>
                         </View>
-                    </View>
+                      )}
+                      <Text style={[
+                        styles.cardValue,
+                        { color: isSelected ? '#000000' : (isRed ? '#C20005' : '#111827') }
+                      ]}>
+                        {card}
+                      </Text>
+                      <Text style={[
+                        styles.cardSuit,
+                        { color: isSelected ? '#000000' : (isRed ? '#C20005' : '#111827') }
+                      ]}>
+                        {suit}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-                    <View style={localStyles.controlGroup}>
-                        <Text style={localStyles.betInputLabel}>Bet Amount (Coins)</Text>
-                        <View style={localStyles.betInputWrap}>
-                            <Text style={localStyles.betInputText}>{entryFee}</Text>
-                            <Text style={localStyles.coinSuffix}>Coins</Text>
-                        </View>
-                    </View>
-                </View>
+            {/* Pool Prize Strip */}
+            <View style={styles.prizeStrip}>
+              <View style={styles.prizeStripItem}>
+                <Text style={styles.prizeStripLabel}>ENTRY FEE</Text>
+                <Text style={styles.prizeStripValue}>₹{entryFee}</Text>
+              </View>
+              <View style={styles.prizeStripDivider} />
+              <View style={styles.prizeStripItem}>
+                <Text style={styles.prizeStripLabel}>WIN PRIZE</Text>
+                <Text style={[styles.prizeStripValue, { color: '#FFD700' }]}>
+                  ₹{Number(winningPrize).toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.prizeStripDivider} />
+              <View style={styles.prizeStripItem}>
+                <Text style={styles.prizeStripLabel}>MULTIPLIER</Text>
+                <Text style={[styles.prizeStripValue, { color: '#00C853' }]}>{reward}</Text>
+              </View>
+            </View>
 
-                {/* 2. Casino Felt Table Panel */}
-                <View style={localStyles.casinoTable}>
-                    <View style={localStyles.statusBanner}>
-                        <Text style={localStyles.statusText}>WAITING FOR YOUR BET...</Text>
-                    </View>
-
-                    <View style={localStyles.drawZone}>
-                        {/* Deck Stack */}
-                        <View style={localStyles.deckContainer}>
-                            <PlayingCardBack width={72} height={104} style={localStyles.deckCardBack1} />
-                            <PlayingCardBack width={72} height={104} style={localStyles.deckCardBack2} />
-                            <PlayingCardBack width={72} height={104} style={localStyles.deckCardBack3} />
-                        </View>
-
-                        {/* Reveal Slot */}
-                        <View style={localStyles.slotContainer}>
-                            <View style={localStyles.revealSlot}>
-                                <Text style={localStyles.revealSlotText}>?</Text>
-                            </View>
-                            <Text style={localStyles.slotLabel}>REVEAL SLOT</Text>
-                        </View>
-                    </View>
-
-                    <View style={localStyles.tableStatsBar}>
-                        <Text style={localStyles.tableStatsText}>
-                            Your Choice: <Text style={localStyles.tableStatsValue}>{getSelectedCardText()}</Text>
-                        </Text>
-                        <Text style={localStyles.tableStatsText}>
-                            Virtual Balance: <Text style={localStyles.tableStatsValue}>{Number(balance).toLocaleString()} Coins</Text>
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Leaderboard */}
-                <View style={{ marginTop: 10 }}>
-                    <LeaderboardScreen />
-                </View>
-            </ScrollView>
-
-            {/* Bottom Action Button */}
+            {/* Bottom Place Bet CTA Button */}
             <TouchableOpacity
-                style={[localStyles.actionButton, !selectedCard && localStyles.disabledButton, { margin: 16 }]}
-                onPress={handlePlaceBet}
-                disabled={!selectedCard}
+              style={[styles.placeBetBtn, !selectedCard && styles.disabledBtn]}
+              onPress={handlePlaceBet}
+              disabled={!selectedCard || loading}
+              activeOpacity={0.85}
             >
-                <LinearGradient
-                    colors={selectedCard ? ['#B22222', '#8B0000'] : ['#8D7B70', '#5C4E46']}
-                    style={localStyles.actionButtonGradient}
-                >
-                    <Text style={localStyles.actionButtonText}>
-                        {selectedCard ? `Lock Bet & Draw Card` : 'SELECT A CARD'}
-                    </Text>
-                </LinearGradient>
+              <LinearGradient
+                colors={selectedCard ? ['#00C853', '#007E33'] : ['#475569', '#334155']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.placeBetGradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.placeBetBtnText}>
+                    {selectedCard
+                      ? `PLACE BET · ${selectedCard} (ROUND ${currentRound}/${totalRounds})`
+                      : 'SELECT 1 CARD TO BET'}
+                  </Text>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
-        </SafeAreaView>
-    );
+          </LinearGradient>
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
+  );
 }
 
-const localStyles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F7F5F0', // Clean Cream/Alabaster
-        paddingTop: 45,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1.5,
-        borderBottomColor: 'rgba(178, 34, 34, 0.1)',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
-    backButton: {
-        color: '#B22222', // Firebrick Red
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#2C1E15', // Charcoal Brown
-    },
-    coinBalance: {
-        backgroundColor: 'rgba(197, 155, 39, 0.15)', // Light gold/yellow background
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(197, 155, 39, 0.3)',
-    },
-    coinText: {
-        color: '#C59B27', // Dark Gold
-        fontWeight: 'bold',
-        fontSize: 13,
-    },
-    infoBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingVertical: 12,
-        backgroundColor: '#EFEBE4', // Warm grey info bar
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
-    },
-    infoItem: {
-        alignItems: 'center',
-    },
-    infoLabel: {
-        color: '#8D7B70', // text-dimmed
-        fontSize: 10,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-    },
-    infoValue: {
-        color: '#2C1E15',
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginTop: 2,
-    },
-    scrollContent: {
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 40,
-    },
-    // The Select Card Panel (White Card Layout)
-    selectionCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 24,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(178, 34, 34, 0.15)',
-        shadowColor: '#8D7B70',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-        elevation: 4,
-        marginBottom: 20,
-    },
-    panelTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#2C1E15',
-        marginBottom: 10,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(178, 34, 34, 0.15)',
-        marginBottom: 16,
-    },
-    controlGroup: {
-        marginBottom: 20,
-    },
-    controlLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#8D7B70',
-        marginBottom: 10,
-    },
-    cardsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        rowGap: 10,
-    },
-    // Card selector button styles
-    cardButton: {
-        borderRadius: 8,
-        borderWidth: 1.5,
-        borderColor: 'rgba(178, 34, 34, 0.2)',
-        backgroundColor: '#FCFAF7',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 10,
-    },
-    cardButtonActive: {
-        backgroundColor: '#B22222', // Firebrick Red
-        borderColor: '#B22222',
-        shadowColor: '#B22222',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 4,
-    },
-    cardButtonText: {
-        fontSize: 15,
-        fontWeight: 'bold',
-    },
-    // Bet input mockup
-    betInputLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#8D7B70',
-        marginBottom: 8,
-    },
-    betInputWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FCFAF7',
-        borderWidth: 1.5,
-        borderColor: 'rgba(178, 34, 34, 0.25)',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    betInputText: {
-        flex: 1,
-        color: '#B22222',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    coinSuffix: {
-        color: '#B22222',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    
-    // Casino felt table styles
-    casinoTable: {
-        backgroundColor: '#0E3A2F', // Green Felt
-        borderWidth: 6,
-        borderColor: '#C59B27', // Gold felt border
-        borderRadius: 20,
-        padding: 20,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 8,
-        marginBottom: 20,
-    },
-    statusBanner: {
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        width: '100%',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    statusText: {
-        color: '#FFFFFF',
-        fontSize: 11,
-        fontWeight: '800',
-        letterSpacing: 1.5,
-    },
-    drawZone: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        width: '100%',
-        marginVertical: 10,
-    },
-    deckContainer: {
-        position: 'relative',
-        width: 80,
-        height: 120,
-    },
-    deckCardBack1: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        transform: [{ rotate: '-3deg' }],
-    },
-    deckCardBack2: {
-        position: 'absolute',
-        top: -2,
-        left: 4,
-        transform: [{ rotate: '1deg' }],
-    },
-    deckCardBack3: {
-        position: 'absolute',
-        top: -4,
-        left: 8,
-        transform: [{ rotate: '4deg' }],
-    },
-    slotContainer: {
-        alignItems: 'center',
-    },
-    revealSlot: {
-        width: 72,
-        height: 104,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    revealSlotText: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: 'rgba(255, 255, 255, 0.2)',
-    },
-    slotLabel: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: 'rgba(255, 255, 255, 0.4)',
-        letterSpacing: 1,
-    },
-    tableStatsBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-        paddingTop: 14,
-        marginTop: 20,
-    },
-    tableStatsText: {
-        fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.7)',
-    },
-    tableStatsValue: {
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-    },
-    
-    // Actions
-    actionButton: {
-        borderRadius: 30,
-        overflow: 'hidden',
-        shadowColor: '#B22222',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 5,
-    },
-    actionButtonGradient: {
-        paddingVertical: 16,
-        alignItems: 'center',
-    },
-    actionButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-        letterSpacing: 1.2,
-    },
-    disabledButton: {
-        opacity: 0.5,
-    },
+const styles = StyleSheet.create({
+  mainBackground: {
+    flex: 1,
+  },
+  safeContainer: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 6 : 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    height: 56,
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#6c0606',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  chainDecorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 30,
+  },
+  chainSvg: {
+    position: 'absolute',
+    top: 0,
+  },
+  chainStar: {
+    position: 'absolute',
+    top: 8,
+  },
+  walletBtn: {
+    backgroundColor: '#EAA015',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFF5C2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  walletBtnText: {
+    color: '#000',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  cardWrapper: {
+    flex: 1,
+    marginHorizontal: 14,
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+  },
+  cardContent: {
+    flex: 1,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  headerLine: {
+    height: 1,
+    width: 35,
+    backgroundColor: 'rgba(212, 175, 55, 0.6)',
+  },
+  cardTitle: {
+    color: '#FFD700',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginHorizontal: 10,
+    textTransform: 'uppercase',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  slotBadge: {
+    backgroundColor: '#262626',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#444444',
+  },
+  megaSlotBadge: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    borderColor: '#FFD700',
+  },
+  slotBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  roundBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  roundBadgeText: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  timerBadgeText: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  timerUrgent: {
+    color: '#FF4444',
+  },
+  instructionWrap: {
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  instructionTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  instructionSub: {
+    color: '#D4AF37',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 6,
+  },
+  cardItem: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  cardItemSelected: {
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
+    transform: [{ scale: 1.05 }],
+  },
+  cardInner: {
+    flex: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  selectionIndexBadge: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: '#000',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionIndexText: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  cardValue: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  cardSuit: {
+    fontSize: 16,
+    marginTop: -2,
+  },
+  prizeStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 15, 15, 0.85)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+    marginVertical: 6,
+  },
+  prizeStripItem: {
+    alignItems: 'center',
+  },
+  prizeStripLabel: {
+    color: '#888888',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  prizeStripValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  prizeStripDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#333333',
+  },
+  placeBetBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginTop: 6,
+    shadowColor: '#00C853',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  disabledBtn: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  placeBetGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeBetBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
 });

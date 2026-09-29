@@ -62,53 +62,63 @@ export default function ContestPoolScreen({ route, navigation }) {
 
       if (Array.isArray(poolsRes) && poolsRes.length > 0) {
         let activeMega = null;
-        let activeRegular = null;
         const otherPools = [];
         const timerInit = {};
 
         poolsRes.forEach((p) => {
-          const isMega = p.is_daily_mega || p.pool_type === 'mega_daily';
+          const isMega = Boolean(p.is_daily_mega || p.pool_type === 'mega_daily');
+          const isRegular = p.pool_type === 'regular_5min' || p.pool_type === 'regular_pool' || (p.name && p.name.includes('Regular'));
+          const isHourly = p.pool_type === 'hourly_pool' || p.pool_type?.includes('hourly') || (p.interval_minutes && p.interval_minutes >= 60) || (p.name && p.name.toLowerCase().includes('hourly'));
+
           const p1 = p.prize_distribution?.['1'] || (p.entry_fee ? p.entry_fee * 30 : 0);
           const p2 = p.prize_distribution?.['2'] || (p.entry_fee ? p.entry_fee * 20 : 0);
           const p3 = p.prize_distribution?.['3'] || (p.entry_fee ? p.entry_fee * 10 : 0);
           const totalPrize = p.win_prize || (p1 + p2 + p3) || 1000;
-          let remSecs = typeof p.remaining_seconds === 'number' ? p.remaining_seconds : 300;
-          if (!isMega && remSecs > 300) {
-            remSecs = 300;
+
+          let timerSecs = 300;
+          if (typeof p.starts_in_seconds === 'number' && p.starts_in_seconds > 0) {
+            timerSecs = p.starts_in_seconds;
+          } else if (typeof p.remaining_seconds === 'number') {
+            timerSecs = p.remaining_seconds;
+          }
+          if (isRegular && timerSecs > 300) {
+            timerSecs = 300;
           }
 
-          timerInit[p.id] = remSecs;
+          timerInit[p.id] = timerSecs;
 
           const poolObj = {
             id: p.id,
             poolId: p.id,
             slotNumber: p.slot_number || 1,
-            name: p.name || 'Regular Pool',
-            poolType: p.pool_type || 'regular_pool',
-            entryFee: p.entry_fee || 10,
+            name: p.name || (isHourly ? 'Hourly Pool' : 'Regular Pool'),
+            poolType: p.pool_type || (isHourly ? 'hourly_pool' : 'regular_pool'),
+            entryFee: p.entry_fee || (isHourly ? 20 : 10),
             winningPrize: totalPrize,
             winPrize: totalPrize,
             maxSlots: p.max_players || 100,
             filledSlots: p.participants_count || 0,
             status: p.status || 'upcoming',
             isDailyMega: isMega,
+            isHourly: isHourly,
+            isRegular: isRegular,
+            isEntryEnabled: p.is_entry_enabled !== false,
+            startsInSeconds: p.starts_in_seconds || 0,
+            countdownLabel: p.countdown_label || '',
             userHasPlayedToday: !!p.user_has_played_today,
             scheduleDisplay: isMega
               ? 'Daily 1:30 PM (5 mins)'
-              : (p.schedule_display && !p.schedule_display.includes('Hour')
-                ? p.schedule_display
-                : 'Every 5 mins'),
+              : (p.schedule_display || (isHourly ? `Every ${Math.round((p.interval_minutes || 60) / 60)} Hours • Entry ₹${p.entry_fee || 20}` : `Every 5 Mins • Entry ₹${p.entry_fee || 10}`)),
             firstPrize: p1,
             secondPrize: p2,
             thirdPrize: p3,
             roundsCount: p.rounds_count || 10,
-            remainingSeconds: remSecs,
+            remainingSeconds: timerSecs,
           };
 
           if (isMega && !activeMega) {
             activeMega = poolObj;
-          } else if (!isMega && !activeRegular) {
-            activeRegular = poolObj;
+          } else {
             otherPools.push(poolObj);
           }
         });
@@ -168,7 +178,7 @@ export default function ContestPoolScreen({ route, navigation }) {
 
         Object.keys(next).forEach((key) => {
           if (next[key] <= 1) {
-            next[key] = 300; // Reset to full 5 minutes
+            next[key] = 0;
             hasExpired = true;
             expiredIds.push(key);
           } else {
@@ -177,24 +187,6 @@ export default function ContestPoolScreen({ route, navigation }) {
         });
 
         if (hasExpired) {
-          // Immediately update local UI so next slot shows instantly without blank delay
-          setPools((currentPools) =>
-            currentPools.map((p) => {
-              if (expiredIds.includes(String(p.id))) {
-                const nextSlot = (p.slotNumber || 1) + 1;
-                const baseName = (p.name || 'Contest Pool').replace(/\s*-\s*Slot\s*#\d+/i, '').replace(/\s*\(Slot\s*#\d+\)/i, '').trim();
-                return {
-                  ...p,
-                  slotNumber: nextSlot,
-                  name: `${baseName} (Slot #${nextSlot})`,
-                  filledSlots: 0,
-                  remainingSeconds: 300,
-                };
-              }
-              return p;
-            })
-          );
-
           // Sync with backend to ensure DB models create the new slot & round 1
           fetchPoolsData();
         }
@@ -209,8 +201,12 @@ export default function ContestPoolScreen({ route, navigation }) {
 
   const formatTimer = (totalSeconds) => {
     const s = Math.max(0, Number(totalSeconds) || 0);
-    const mins = Math.floor(s / 60);
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
     const secs = s % 60;
+    if (hrs > 0) {
+      return `${hrs < 10 ? '0' : ''}${hrs}h:${mins < 10 ? '0' : ''}${mins}m:${secs < 10 ? '0' : ''}${secs}s`;
+    }
     return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
@@ -249,7 +245,16 @@ export default function ContestPoolScreen({ route, navigation }) {
 
     const entryFee = pool.entryFee || (isMega ? 200 : 10);
     const winPrize = pool.winningPrize || (isMega ? pool.firstPrize || 6000 : 1000);
-    const reward = isMega ? '30x' : (pool.rewardMultiplier || '30x');
+
+    const getVariationDefaultMultiplier = () => {
+      if (variation === 'V1' || gameId === 1) return '10x';
+      if (variation === 'V2' || gameId === 5) return '20x';
+      if (variation === 'V3' || gameId === 2) return '32x';
+      if (variation === 'V4' || gameId === 3) return '80x';
+      if (variation === 'V5' || gameId === 4) return '100x';
+      return '30x';
+    };
+    const reward = isMega ? '30x' : (pool.rewardMultiplier || pool.reward || getVariationDefaultMultiplier());
 
     const screenParams = {
       roundId: pool.id,
@@ -447,9 +452,10 @@ export default function ContestPoolScreen({ route, navigation }) {
 
   const renderPoolRow = ({ item, index }) => {
     const fillPercent = Math.min(100, Math.round((item.filledSlots / Math.max(1, item.maxSlots)) * 100));
-    const isRegular = item.poolType === 'regular_5min' || item.poolType === 'regular_pool' || item.entryFee === 10 || item.name?.includes('Regular');
-    const isHourly = !isRegular && item.poolType?.includes('hourly');
-    const poolSecs = Math.min(300, poolTimers[item.id] ?? 300);
+    const isRegular = item.isRegular ?? (item.poolType === 'regular_5min' || item.poolType === 'regular_pool' || item.entryFee === 10 || item.name?.includes('Regular'));
+    const isHourly = item.isHourly ?? (!isRegular && (item.poolType?.includes('hourly') || item.name?.toLowerCase().includes('hourly')));
+    const poolSecs = poolTimers[item.id] ?? item.remainingSeconds ?? 300;
+    const isEntryAllowed = item.isEntryEnabled !== false;
 
     return (
       <View
@@ -461,17 +467,17 @@ export default function ContestPoolScreen({ route, navigation }) {
       >
         {/* Top Header: Pool Tier Tag & Expiration Countdown */}
         <View style={styles.cardTopRow}>
-          <View style={[styles.slotBadge, isRegular && styles.regularSlotBadge]}>
+          <View style={[styles.slotBadge, isRegular && styles.regularSlotBadge, isHourly && styles.hourlySlotBadge]}>
             <Text style={styles.slotBadgeText}>
               {getTierIcon(item.poolType)} {item.name.toUpperCase()}
             </Text>
           </View>
 
           <View style={styles.headerRightWrap}>
-            <View style={styles.timerBadge}>
-              <Ionicons name="time-outline" size={13} color={poolSecs < 15 ? '#FF4444' : '#FFD700'} />
-              <Text style={[styles.timerBadgeText, poolSecs < 15 && styles.timerUrgent]}>
-                {formatTimer(poolSecs)} Left
+            <View style={[styles.timerBadge, isHourly && styles.hourlyTimerBadge]}>
+              <Ionicons name="time-outline" size={13} color={poolSecs < 15 ? '#FF4444' : isHourly ? '#93C5FD' : '#FFD700'} />
+              <Text style={[styles.timerBadgeText, isHourly && styles.hourlyTimerBadgeText, poolSecs < 15 && styles.timerUrgent]}>
+                {isHourly && item.startsInSeconds > 0 ? `Starts in ${formatTimer(poolSecs)}` : `${formatTimer(poolSecs)} Left`}
               </Text>
             </View>
           </View>
@@ -485,16 +491,23 @@ export default function ContestPoolScreen({ route, navigation }) {
           </View>
 
           <TouchableOpacity
+            disabled={!isEntryAllowed}
             onPress={() => requestPoolEntry(item, false)}
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#00C853', '#007E33']}
+              colors={
+                isEntryAllowed
+                  ? (isHourly ? ['#4F46E5', '#3730A3'] : ['#00C853', '#007E33'])
+                  : ['#4B5563', '#374151']
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-              style={styles.entryFeeBtn}
+              style={[styles.entryFeeBtn, !isEntryAllowed && styles.entryBtnDisabled]}
             >
-              <Text style={styles.entryFeeBtnText}>ENTRY ₹{item.entryFee}</Text>
+              <Text style={styles.entryFeeBtnText}>
+                {isEntryAllowed ? `ENTRY ₹${item.entryFee}` : `🔒 STARTS IN ${formatTimer(poolSecs)}`}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -502,20 +515,20 @@ export default function ContestPoolScreen({ route, navigation }) {
         {/* 3-Tier Multiplier Breakdown */}
         <View style={styles.regularPrizeRow}>
           <View style={styles.regularTierBox}>
-            <Text style={styles.regularTierRank}>🥇 1st (50%)</Text>
+            <Text style={styles.regularTierRank}>🥇 1st Prize</Text>
             <Text style={styles.regularTierPrize}>₹{Number(item.firstPrize).toLocaleString()}</Text>
           </View>
           <View style={styles.regularTierBox}>
-            <Text style={styles.regularTierRank}>🥈 2nd (30%)</Text>
+            <Text style={styles.regularTierRank}>🥈 2nd Prize</Text>
             <Text style={styles.regularTierPrize}>₹{Number(item.secondPrize).toLocaleString()}</Text>
           </View>
           <View style={styles.regularTierBox}>
-            <Text style={styles.regularTierRank}>🥉 3rd (20%)</Text>
+            <Text style={styles.regularTierRank}>🥉 3rd Prize</Text>
             <Text style={styles.regularTierPrize}>₹{Number(item.thirdPrize).toLocaleString()}</Text>
           </View>
         </View>
 
-        {/* Progress Bar for Spots (Max 150) */}
+        {/* Progress Bar for Spots */}
         <View style={styles.progressSection}>
           <View style={styles.progressBarTrack}>
             <View
@@ -523,7 +536,7 @@ export default function ContestPoolScreen({ route, navigation }) {
                 styles.progressBarFill,
                 {
                   width: `${fillPercent}%`,
-                  backgroundColor: fillPercent > 80 ? '#FF5252' : '#FF9900',
+                  backgroundColor: isHourly ? '#60A5FA' : (fillPercent > 80 ? '#FF5252' : '#FF9900'),
                 },
               ]}
             />
@@ -1072,6 +1085,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#14532D',
     borderColor: '#22C55E',
   },
+  hourlySlotBadge: {
+    backgroundColor: '#1E1B4B',
+    borderColor: '#6366F1',
+  },
   slotBadgeText: {
     color: '#FFF',
     fontSize: 11,
@@ -1105,13 +1122,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.3)',
   },
+  hourlyTimerBadge: {
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+  },
   timerBadgeText: {
     color: '#FFD700',
     fontSize: 11,
     fontWeight: '800',
   },
+  hourlyTimerBadgeText: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   timerUrgent: {
     color: '#FF4444',
+  },
+  entryBtnDisabled: {
+    opacity: 0.7,
   },
   mainInfoRow: {
     flexDirection: 'row',

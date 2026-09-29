@@ -63,9 +63,17 @@ export default function WinningScreen({ route, navigation }) {
   const trophyAnim = useRef(new Animated.Value(0)).current;
 
   const navigateBackToPools = useCallback(() => {
+    let defaultVar = 'V2';
+    let defaultId = 5;
+    if (gameType === 'single') { defaultVar = 'V1'; defaultId = 1; }
+    else if (gameType === 'pair') { defaultVar = 'V2'; defaultId = 5; }
+    else if (gameType === 'trio') { defaultVar = 'V3'; defaultId = 2; }
+    else if (gameType === 'lastDigitSum') { defaultVar = 'V4'; defaultId = 3; }
+    else if (gameType === 'jackpot') { defaultVar = 'V5'; defaultId = 4; }
+
     navigation.navigate('ContestPool', {
-      gameVariation: params.gameVariation || (gameType === 'pair' ? 'V2' : 'V1'),
-      gameId: params.gameId || 5,
+      gameVariation: params.gameVariation || defaultVar,
+      gameId: params.gameId || defaultId,
     });
   }, [navigation, params, gameType]);
 
